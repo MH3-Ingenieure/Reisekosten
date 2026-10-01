@@ -250,6 +250,7 @@ function helpView() {
         <li>Beleg verloren? Bei der Position „Eigenbeleg“ ankreuzen und begründen.</li>
         <li>Rechnung nur digital erhalten (z. B. PDF per E-Mail)? Beim Beleg „digitales Original“ ankreuzen – dann wird kein Papier im Büro erwartet. Bei PDF-Dateien ist das vorbelegt.</li>
         <li>Der Betrag ist immer der Bruttobetrag laut Beleg. Die Umsatzsteuer ist darin enthalten; die App rechnet sie für die Buchhaltung heraus.</li>
+        <li>Restaurant oder Hotel mit zwei Steuersätzen (Speisen 7 %, Getränke 19 %): Umsatzsteuersatz „gemischt“ wählen und den Anteil zu 7 % sowie ein Trinkgeld eintragen – den Rest rechnet die App zu 19 %. Steht auf dem Beleg eine Steuertabelle, übernimmt die Belegerkennung die Aufteilung selbst.</li>
         <li>Gehört eine Ausgabe zu einem anderen Projekt als die Reise, bei der Position das Projekt ändern.</li>
         <li>Bewirtungen brauchen Anlass, Teilnehmer und Ort.</li>
         <li>Mit Firmenkarte bezahlte Beträge werden mit abgerechnet, aber nicht an Sie ausgezahlt.</li>
@@ -272,16 +273,41 @@ function openPos(d, p, ro = false) {
   const w = clone(p || blankPos(d));
   w.bewirtung = w.bewirtung || { anlass: '', teilnehmer: '', ort: '' };
   if (w.projekt === undefined) w.projekt = d.kopf.kostenstelle || '';
-  UI.pos = { draftId: d.id, p: w, isNew, ro, added: [], removed: [], busy: 0, raw: { brutto: moneyIn(w.brutto), km: numIn(w.km) }, ocr: null, touched: {} };
+  const teil = sz => w.ustSplit?.find(t => t.satz === sz)?.brutto || 0;
+  UI.pos = {
+    draftId: d.id, p: w, isNew, ro, added: [], removed: [], busy: 0, ocr: null, touched: {},
+    mixed: !!w.ustSplit?.length, raw: { brutto: moneyIn(w.brutto), km: numIn(w.km), s7: moneyIn(teil(7)), s0: moneyIn(teil(0)) }
+  };
   renderPos();
   if (isNew) setTimeout(() => $('.ka-grid button')?.focus(), 50);
 }
+// Gemischter Beleg: Anteil 7 % und Trinkgeld (ohne USt) eingeben, der Rest zählt zu 19 %
+function mixParts(s) {
+  const b = parseMoney(s.raw.brutto), a7 = parseMoney(s.raw.s7) || 0, a0 = parseMoney(s.raw.s0) || 0;
+  return { b, a7, a0, a19: (Number.isNaN(b) ? 0 : b) - a7 - a0 };
+}
 // Umsatzsteuer ist im Bruttobetrag enthalten und wird herausgerechnet
 function ustText(p, raw) {
-  const b = parseMoney(raw), s = Number(p.ust) || 0;
+  const net = (g, s) => Math.round(g / (1 + s / 100));
+  const s = UI.pos;
+  if (s?.mixed) {
+    const m = mixParts(s);
+    if (Number.isNaN(m.b) || !m.b) return '';
+    if (m.a19 < 0) return 'Die Anteile sind größer als der Betrag – bitte prüfen.';
+    const tax = [[7, m.a7], [19, m.a19]].filter(([, g]) => g > 0).map(([z, g]) => `${money(g - net(g, z))} zu ${z} %`);
+    return `darin Umsatzsteuer ${tax.join(' und ') || '0,00 €'}${m.a0 ? `; ${money(m.a0)} ohne Umsatzsteuer (Trinkgeld)` : ''}`;
+  }
+  const b = parseMoney(raw), z = Number(p.ust) || 0;
   if (Number.isNaN(b) || !b) return '';
-  const net = Math.round(b / (1 + s / 100));
-  return s ? `darin ${money(b - net)} Umsatzsteuer (${s} %), netto ${money(net)}` : 'ohne Umsatzsteuer';
+  return z ? `darin ${money(b - net(b, z))} Umsatzsteuer (${z} %), netto ${money(net(b, z))}` : 'ohne Umsatzsteuer';
+}
+function mixHTML(s, dis) {
+  if (!s.mixed) return '';
+  const m = mixParts(s);
+  return `<div class="sub-card mix"><div class="sub-title">Aufteilung nach Steuersatz</div><div class="grid">
+    <label class="fld"><span>davon zu 7 % (z. B. Speisen, Übernachtung)</span><input data-p="s7" value="${esc(s.raw.s7)}" inputmode="decimal" placeholder="0,00"${dis}></label>
+    <label class="fld"><span>davon ohne Umsatzsteuer (Trinkgeld)</span><input data-p="s0" value="${esc(s.raw.s0)}" inputmode="decimal" placeholder="0,00"${dis}></label>
+    <div class="fld wide"><span>Rest zu 19 % (z. B. Getränke, Frühstück)</span><div class="calc" id="mix-19">${money(Math.max(0, m.a19))}</div></div></div></div>`;
 }
 function belegeHTML(p, ro, s) {
   return `<div class="belege">
@@ -305,11 +331,13 @@ function ocrHTML(s) {
   if (f.kostenart) parts.push(KA(f.kostenart).name);
   if (f.brutto) parts.push(money(f.brutto));
   if (f.datum) parts.push(fmtDate(f.datum));
-  if (f.ust != null) parts.push(f.ust + ' % USt');
+  if (f.split) parts.push(f.split.map(t => `${money(t.brutto)} ${t.satz ? 'zu ' + t.satz + ' %' : 'Trinkgeld'}`).join(' + '));
+  else if (f.ust != null) parts.push(f.ust + ' % USt');
   if (f.aussteller) parts.push(f.aussteller);
+  if (f.ort) parts.push(f.ort);
   return `<div class="ocr ok">${ic('check')}<div>${parts.length ? 'Aus dem Beleg übernommen: <b>' + esc(parts.join(' · ')) + '</b>. Bitte prüfen.' : 'Auf dem Beleg wurden keine Angaben erkannt – bitte von Hand eintragen.'}
     <button type="button" class="link" data-action="ocr-run">erneut lesen</button>
-    ${f.mixed ? '<br><b>Achtung:</b> Der Beleg enthält 7 % und 19 % Umsatzsteuer (z. B. Übernachtung und Frühstück). Steuersatz bitte prüfen und den Beleg bei Bedarf auf zwei Positionen aufteilen.' : ''}</div></div>`;
+    ${f.mixed ? '<br><b>Bitte ergänzen:</b> Der Beleg enthält 7 % und 19 % Umsatzsteuer. Unten bei „Aufteilung nach Steuersatz“ den Anteil zu 7 % (und ggf. das Trinkgeld) eintragen.' : ''}</div></div>`;
 }
 function renderPos() {
   const s = UI.pos, p = s.p, ro = s.ro, ka = p.kostenart ? KA(p.kostenart) : null;
@@ -340,9 +368,10 @@ function renderPos() {
         <div class="fld"><span>Belege</span>${belegeHTML(p, ro, s)}</div>${ocrHTML(s)}
         <label class="check"><input type="checkbox" data-p="eigenbeleg"${p.eigenbeleg ? ' checked' : ''}${dis}> Eigenbeleg – der Originalbeleg ist verloren gegangen</label>
         ${p.eigenbeleg ? `<label class="fld"><span>Begründung für den Eigenbeleg</span><textarea data-p="eigenbelegGrund" rows="2"${dis}>${esc(p.eigenbelegGrund)}</textarea></label>` : ''}
-        <div class="grid"><label class="fld"><span>Umsatzsteuersatz</span><select data-p="ust"${dis}>${[19, 7, 0].map(v => `<option value="${v}"${Number(p.ust) === v ? ' selected' : ''}>${v} %</option>`).join('')}</select></label>
+        <div class="grid"><label class="fld"><span>Umsatzsteuersatz</span><select data-p="ust"${dis}>${[19, 7, 0].map(v => `<option value="${v}"${!s.mixed && Number(p.ust) === v ? ' selected' : ''}>${v} %</option>`).join('')}
+          <option value="mix"${s.mixed ? ' selected' : ''}>gemischt (7 % / 19 % / Trinkgeld)</option></select></label>
         <div class="fld"><span>Zahlungsart</span><div class="seg">${Object.entries(ZAHLUNG).map(([k, l]) => `<button type="button" class="${p.zahlungsart === k ? 'on' : ''}" data-action="pos-pay" data-key="${k}"${dis}>${l}</button>`).join('')}</div></div>
-        ${projekt}</div>`;
+        ${projekt}</div>${mixHTML(s, dis)}`;
       if (ka.art === 'bewirtung') body += `<div class="sub-card"><div class="sub-title">Bewirtung (Pflichtangaben)</div><div class="grid">
         ${inp('Anlass', 'bew.anlass', p.bewirtung.anlass)}${inp('Ort der Bewirtung', 'bew.ort', p.bewirtung.ort, ' placeholder="Name und Ort des Lokals"')}
         <label class="fld wide"><span>Teilnehmer (Name, Firma)</span><textarea data-p="bew.teilnehmer" rows="3"${dis}>${esc(p.bewirtung.teilnehmer)}</textarea></label></div></div>`;
@@ -363,11 +392,20 @@ function renderPos() {
 function posInput(el) {
   const s = UI.pos, p = s.p, f = el.dataset.p;
   if (f === 'eigenbeleg') { p.eigenbeleg = el.checked; renderPos(); return; }
-  if (f === 'brutto' || f === 'km') {
+  if (f === 'brutto' || f === 'km' || f === 's7' || f === 's0') {
     s.raw[f] = el.value;
     if (f === 'km') { const km = parseNum(el.value), satz = Data.kmSatz(p.datum); $('#km-calc').innerHTML = Number.isNaN(km) ? 'Kilometer ungültig' : `${numIn(km) || 0} km × ${money(satz)} = <b>${money(Math.round(km * satz))}</b>`; }
-    else if ($('#ust-calc')) $('#ust-calc').textContent = ustText(p, s.raw.brutto);
+    else {
+      if ($('#ust-calc')) $('#ust-calc').textContent = ustText(p, s.raw.brutto);
+      if ($('#mix-19')) $('#mix-19').textContent = money(Math.max(0, mixParts(s).a19));
+    }
     return;
+  }
+  if (f === 'ust') { // „gemischt“ blendet die Aufteilung ein
+    s.touched.ust = true; s.ocrUst = undefined;
+    s.mixed = el.value === 'mix';
+    if (!s.mixed) p.ust = Number(el.value);
+    renderPos(); return;
   }
   if (f.startsWith('bew.')) { p.bewirtung[f.slice(4)] = el.value; return; }
   p[f] = f === 'ust' ? Number(el.value) : el.value;
@@ -413,10 +451,21 @@ async function runOcr(b, force) {
     if (f.kostenart && (!p.kostenart || force)) { const k = KA(f.kostenart); if (k.art !== 'km') { p.kostenart = k.key; p.ust = k.ust; used.kostenart = k.key; } }
     if (f.brutto && (!parseMoney(s.raw.brutto) || force)) { s.raw.brutto = moneyIn(f.brutto); used.brutto = f.brutto; }
     if (f.datum && (!s.touched.datum || force)) { p.datum = f.datum; used.datum = f.datum; }
-    if (f.ust != null && (!s.touched.ust || force)) { p.ust = f.ust; used.ust = f.ust; }
-    if (f.aussteller && (!p.bemerkung || force)) { p.bemerkung = f.aussteller; used.aussteller = f.aussteller; }
-    if (f.mixed) used.mixed = true;
-    if (isBew(p) && !p.bewirtung.ort) p.bewirtung.ort = [f.aussteller, d?.kopf.ort].filter(Boolean).join(', ');
+    if (f.ust != null && (!s.touched.ust || force)) { p.ust = f.ust; used.ust = f.ust; s.ocrUst = f.ust; } // bleibt erhalten, wenn danach die Kostenart gewählt wird
+    if (f.ort) used.ort = f.ort;
+    const wer = [f.aussteller, f.ort].filter(Boolean).join(', ');
+    if (wer && (!p.bemerkung || force)) { p.bemerkung = wer; if (f.aussteller) used.aussteller = f.aussteller; }
+    if (f.ort && d && editable(d) && !String(d.kopf.ort || '').trim()) { d.kopf.ort = f.ort; Data.touch(d); } // Reiseziel noch leer
+    // Aufteilung nach Steuersätzen (z. B. Speisen 7 %, Getränke 19 %, Trinkgeld ohne USt)
+    if (!s.touched.ust || force) {
+      const teil = sz => f.split?.find(t => t.satz === sz)?.brutto || 0;
+      if (f.split) { s.mixed = true; s.raw.s7 = moneyIn(teil(7)); s.raw.s0 = moneyIn(teil(0)); used.split = f.split; }
+      else if (f.mixed) { s.mixed = true; s.raw.s7 = ''; s.raw.s0 = ''; used.mixed = true; }
+      else if (f.ust != null) s.mixed = false;
+      else if (isBew(p)) s.mixed = true; // Bewirtung ohne erkennbaren Satz: Aufteilung anbieten
+    }
+    if (isBew(p) && (!p.bewirtung.ort || p.bewirtung.ort === d?.kopf.ort || force)) p.bewirtung.ort = [f.aussteller, f.ort || d?.kopf.ort].filter(Boolean).join(', ');
+    s.ocrBew = [f.aussteller, f.ort].filter(Boolean).join(', '); // falls Bewirtung erst danach gewählt wird
     s.ocr = { state: 'ok', found: used };
   } catch (e) {
     if (UI.pos === s) s.ocr = { state: 'err', msg: e.message };
@@ -438,6 +487,15 @@ function savePos() {
     const c = parseMoney(s.raw.brutto);
     if (Number.isNaN(c)) return toast('Bitte den Betrag als Zahl eintragen, z. B. 12,50.');
     Object.assign(p, { brutto: c, km: 0, kmSatz: 0, strecke: '' });
+    delete p.ustSplit;
+    if (s.mixed) {
+      const m = mixParts(s);
+      if (Number.isNaN(parseMoney(s.raw.s7)) || Number.isNaN(parseMoney(s.raw.s0))) return toast('Bitte die Anteile als Zahl eintragen, z. B. 59,10.');
+      if (m.a19 < 0) return toast('Die Anteile zu 7 % und das Trinkgeld sind zusammen größer als der Betrag.');
+      const parts = [{ satz: 7, brutto: m.a7 }, { satz: 19, brutto: m.a19 }, { satz: 0, brutto: m.a0 }].filter(t => t.brutto > 0);
+      if (parts.length > 1) { p.ustSplit = parts; p.ust = 19; }
+      else p.ust = parts[0]?.satz ?? 19; // nur ein Satz übrig: normale Position
+    }
   }
   if (!isBew(p)) p.bewirtung = { anlass: '', teilnehmer: '', ort: '' };
   const i = d.positionen.findIndex(x => x.id === p.id);
@@ -564,10 +622,14 @@ const ACTIONS = {
   'edit-pos': el => { const d = current(); if (d) openPos(d, d.positionen.find(p => p.id === el.dataset.id), !editable(d)); },
   'view-pos': el => { const [, id] = route(); const d = Data.draft(id) || Data.claim(id); if (d) openPos(d, d.positionen.find(p => p.id === el.dataset.id), true); },
   'pos-ka': el => {
-    const p = UI.pos.p, ka = KA(el.dataset.key);
-    p.kostenart = ka.key; p.ust = ka.ust; UI.pos.pickKa = false;
+    const s = UI.pos, p = s.p, ka = KA(el.dataset.key);
+    // Steuersatz: vom Beleg erkannt oder von Hand gesetzt hat Vorrang vor dem Standard der Kostenart
+    p.kostenart = ka.key; p.ust = s.ocrUst ?? (s.touched.ust ? p.ust : ka.ust); s.pickKa = false;
+    // Bewirtung: Speisen 7 %, Getränke 19 % – daher standardmäßig „gemischt“, sofern nichts anderes erkannt oder gewählt
+    if (ka.art === 'bewirtung' && s.ocrUst == null && !s.touched.ust) s.mixed = true;
+    else if (ka.art === 'km') s.mixed = false;
     if (ka.art === 'km') p.zahlungsart = 'privat';
-    if (ka.art === 'bewirtung' && !p.bewirtung.ort) { const d = Data.draft(UI.pos.draftId); p.bewirtung.ort = d?.kopf.ort || ''; } // meist der Ort der Reise
+    if (ka.art === 'bewirtung' && !p.bewirtung.ort) { const d = Data.draft(s.draftId); p.bewirtung.ort = s.ocrBew || d?.kopf.ort || ''; } // vom Beleg, sonst Ort der Reise
     renderPos();
     setTimeout(() => $(ka.art === 'km' ? '[data-p="strecke"]' : '[data-p="brutto"]')?.focus(), 30);
   },

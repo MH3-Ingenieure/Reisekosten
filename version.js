@@ -1,6 +1,15 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.3.1';
 const APP_CHANGES = [
+  {
+    v: '0.3.1', d: '02.10.2026', items: [
+      'Belegerkennung übernimmt den Steuersatz zuverlässiger: auch ohne %-Zeichen („MwSt A 19“) und aus dem ausgewiesenen Steuerbetrag zurückgerechnet',
+      'Erkannter Steuersatz bleibt erhalten, wenn die Kostenart danach von Hand gewählt wird',
+      'Ort des Ausstellers wird erkannt: in die Bemerkung, bei Bewirtung in „Ort der Bewirtung“, bei leerem Reiseziel auch dorthin',
+      'Gemischte Steuersätze: Betrag einer Position auf 7 %, 19 % und Trinkgeld (ohne USt) aufteilen; bei Bewirtung voreingestellt; die Belegerkennung liest die Aufteilung aus Steuertabellen wie „A= 19,0 … B= 7,0 …“',
+      'Belegerkennung: Datum auch als „30-Sep-26“, Endbetrag auch in der Zeile unter „Total“, Firmenname mit Rechtsform als Aussteller'
+    ]
+  },
   {
     v: '0.3.0', d: '01.10.2026', items: [
       'Belegerkennung: Foto oder PDF zuerst – die App liest Kostenart, Betrag, Datum, Umsatzsteuer und Aussteller aus (läuft auf dem Gerät, ohne Lizenz)',

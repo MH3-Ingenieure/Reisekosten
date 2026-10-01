@@ -70,10 +70,10 @@ const Ocr = (() => {
     ['flug', /lufthansa|eurowings|condor|ryanair|easyjet|boarding|flugschein|airline|flug\s?nr|ticketnummer.*flug/],
     ['taxi', /taxi|ö?pnv|rheinbahn|vrr|bvg|mvv|hvv|kvb|uber|free\s?now|einzelfahrschein|tageskarte|deutschlandticket/],
     ['mietwagen', /sixt|europcar|avis|hertz|enterprise|autovermietung|mietwagen|rent a car/],
-    ['kraftstoff', /aral|shell|esso|jet\b|totalenergies|\btotal\b|agip|avia|tankstelle|diesel|super e10|super e5|kraftstoff|liter|zapfs/],
+    ['kraftstoff', /aral|shell|esso|\bjet\b|totalenergies|total tankstelle|agip|avia|tankstelle|diesel|super e10|super e5|kraftstoff|liter|zapfs/],
     ['parken', /parkhaus|parken|parkschein|parkgeb|contipark|apcoa|q-park|ein-?\s?ausfahrt|maut|toll/],
     ['hotel', /hotel|übernachtung|logis|motel one|ibis|b&b|booking\.com|zimmer|check-?in|frühstück.*inkl|city tax|beherbergung/],
-    ['bewirtung', /restaurant|gaststätte|gasthaus|bewirtung|ristorante|pizzeria|trattoria|bistro|brauhaus|café|cafe|speisen|getränke|tisch\s?\d|bedienung|kellner/]
+    ['bewirtung', /restaurant|gaststätte|gaststatte|gastst|gasthaus|bewirtung|ristorante|pizzeria|trattoria|bistro|brauhaus|café|cafe|speisen|getränke|getranke|tisch\s?-?\s?n?r?\.?:?\s?\d|bedienung|bedient|kellner|trinkgeld/]
   ];
   const GENERIC = /^(rechnung|quittung|beleg|kassenbon|bon|invoice|receipt|seite|page|kopie|original|duplikat|steuernummer|ust-?id|datum|tel|fax|www\.|http)/i;
   const toCent = s => Math.round(Number(s.replace(/\s/g, '').replace(/\.(?=\d{3}\b)/g, '').replace(',', '.')) * 100);
@@ -83,28 +83,95 @@ const Ocr = (() => {
     const out = {};
     // Datum: erstes plausibles Datum (nicht in der Zukunft, höchstens drei Jahre alt)
     const today = new Date(), min = new Date(today.getFullYear() - 3, 0, 1);
-    for (const m of text.matchAll(/(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4}|\d{2})(?!\d)|(\d{4})-(\d{2})-(\d{2})/g)) {
-      const [y, mo, d] = m[4] ? [Number(m[4]), Number(m[5]), Number(m[6])] : [m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), Number(m[2]), Number(m[1])];
+    const MON = { jan: 1, feb: 2, mär: 3, mar: 3, mrz: 3, apr: 4, mai: 5, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, dez: 12, dec: 12 };
+    const dates = [];
+    for (const m of text.matchAll(/(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4}|\d{2})(?!\d)|(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[.\- ]?([A-Za-zÄä]{3})[a-zä]*[.\- ]?(\d{4}|\d{2})(?!\d)/g)) {
+      let y, mo, d;
+      if (m[4]) [y, mo, d] = [Number(m[4]), Number(m[5]), Number(m[6])];
+      else if (m[8]) { mo = MON[m[8].toLowerCase()]; if (!mo) continue; d = Number(m[7]); y = m[9].length === 2 ? 2000 + Number(m[9]) : Number(m[9]); }
+      else [y, mo, d] = [m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]), Number(m[2]), Number(m[1])];
       const dt = new Date(y, mo - 1, d);
       if (dt.getMonth() !== mo - 1 || dt > new Date(today.getTime() + 86400000) || dt < min) continue;
-      out.datum = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      break;
+      dates.push(`${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
     }
-    // Betrag: bevorzugt Zeilen mit „Summe“, „Gesamt“, „zu zahlen“ …
+    if (dates.length) out.datum = dates[0];
+
+    // Beträge: „12,50“ und „12.50“; Tausenderpunkt erlaubt
     const AMT = /(?<![\d.,])(\d{1,3}(?:[.\s]\d{3})+|\d{1,5})[,.](\d{2})(?![\d%])/g;
     const amounts = l => [...l.matchAll(AMT)].map(m => toCent(m[1] + ',' + m[2])).filter(c => c > 0 && c < 1000000);
-    const pick = re => lines.filter(l => re.test(l.toLowerCase()) && !/rückgeld|gegeben|netto|zwischensumme|mwst|ust\b|steuer/i.test(l)).flatMap(amounts);
-    const best = [/summe|gesamt|total|zu zahlen|zahlbetrag|endbetrag|rechnungsbetrag|gesamtbetrag/, /betrag|brutto|ec-?karte|kartenzahlung|girocard|visa|mastercard|eur\b|€/];
+    // Endbetrag: Zeile mit „Total“, „Summe“ … – steht der Betrag in der Zeile darunter, auch diese
+    const SKIP = /rückgeld|gegeben|netto|zwischensumme|mwst|ust\b|steuer|trinkgeld/i;
+    const pick = re => lines.flatMap((l, i) => {
+      if (!re.test(l.toLowerCase()) || SKIP.test(l)) return [];
+      const a = amounts(l);
+      return a.length ? a : (lines[i + 1] && !SKIP.test(lines[i + 1]) ? amounts(lines[i + 1]) : []);
+    });
+    const best = [/total|summe|gesamt|zu zahlen|zahlbetrag|endbetrag|rechnungsbetrag|gesamtbetrag/, /betrag|brutto|ec-?karte|kartenzahlung|girocard|visa|mastercard|unbar|eur\b|€/];
     for (const re of best) { const c = pick(re); if (c.length) { out.brutto = Math.max(...c); break; } }
     if (out.brutto == null) { const all = lines.filter(l => !/rückgeld|gegeben|tel|fax|iban|steuer-?nr/i.test(l)).flatMap(amounts); if (all.length) out.brutto = Math.max(...all); }
-    // Umsatzsteuersatz
-    const rates = [...text.matchAll(/(\d{1,2})(?:[,.]0{1,2})?\s?%/g)].map(m => Number(m[1])).filter(r => r === 19 || r === 7);
-    // beide Sätze (z. B. Hotel mit Frühstück): nicht raten, sondern Hinweis geben
-    if (rates.includes(7) && rates.includes(19)) out.mixed = true;
-    else if (rates.length) out.ust = rates[0];
-    // Aussteller: erste aussagekräftige Zeile oben
+
+    // Trinkgeld (ohne Umsatzsteuer)
+    const tipLine = lines.find(l => /trinkgeld|tip\b|service ?charge/i.test(l));
+    const tip = tipLine ? Math.max(0, ...amounts(tipLine)) : 0;
+
+    // Umsatzsteuer je Satz: aus Steuertabellen („A= 19.0  16,97  3,23  20,20“) und Zeilen mit „7 %“, „MwSt 19“
+    const RATE = /(?:(?<![\d,.])(19|7)(?:[,.]0{1,2})?\s?(?:%|°\/o|0\/0)|(?:mwst|mw\.?-?st|ust|mehrwertsteuer|umsatzsteuer|steuersatz|vat)[^\d\n]{0,12}(19|7)(?![\d,.]\d)|^\s*[A-F]\s*[=:]\s*(19|7)(?:[,.]0{1,2})?(?!\d))/gi;
+    const rates = new Set(), parts = { 7: new Set(), 19: new Set() };
+    const near = (x, y) => Math.abs(x - y) <= 2; // Rundung auf Kassenbons
+    for (const l of lines) {
+      const hits = [...l.matchAll(RATE)];
+      hits.forEach((h, k) => {
+        const r = Number(h[1] || h[2] || h[3]);
+        rates.add(r);
+        // Beträge zwischen dieser und der nächsten Satzangabe gehören zu diesem Satz
+        const seg = l.slice(h.index + h[0].length, k + 1 < hits.length ? hits[k + 1].index : undefined);
+        const a = amounts(seg);
+        let g = null;
+        for (let i = 0; i < a.length && g == null; i++) for (let j = 0; j < a.length && g == null; j++) {
+          if (i === j) continue;
+          const x = a[i], t = a[j];
+          if (near(t, Math.round(x * r / 100))) g = a.find(y => near(y, x + t)) ?? x + t;   // x ist netto: Brutto aus der Zeile oder berechnet
+          else if (near(t, x - Math.round(x * 100 / (100 + r)))) g = x;                    // x ist brutto („7 % auf 109,00 = 7,13“)
+        }
+        if (g != null) parts[r].add(g);
+        else if (a.length === 1) { parts[r].add(a[0]); parts[r].add(Math.round(a[0] * (100 + r) / 100)); parts[r].add(Math.round(a[0] * (100 + r) / r)); } // Brutto, Netto oder Steuer
+      });
+    }
+    // ohne Satzangabe: aus dem Steuerbetrag zurückrechnen (Steuer / (Brutto − Steuer) ≈ 0,19 bzw. 0,07)
+    if (!rates.size && out.brutto) {
+      const base = out.brutto - tip;
+      for (const l of lines.filter(l => /mwst|ust\b|steuer|tax|vat/i.test(l))) {
+        for (const t of amounts(l)) {
+          if (t >= base) continue;
+          const r = t / (base - t);
+          if (Math.abs(r - 0.19) < 0.006) rates.add(19);
+          else if (Math.abs(r - 0.07) < 0.004) rates.add(7);
+        }
+      }
+    }
+    // Aufteilung suchen, deren Summe (mit Trinkgeld) den Endbetrag ergibt
+    if (out.brutto) {
+      const rest = out.brutto - tip, split = [];
+      if (rates.has(7) && rates.has(19)) {
+        outer: for (const a of parts[7]) for (const b of parts[19]) if (near(a + b, rest)) { split.push({ satz: 7, brutto: a }, { satz: 19, brutto: rest - a }); break outer; }
+      } else if (rates.size === 1 && tip) split.push({ satz: [...rates][0], brutto: rest });
+      if (split.length && tip) split.push({ satz: 0, brutto: tip });
+      if (split.length > 1) out.split = split;
+    }
+    if (rates.has(7) && rates.has(19)) out.mixed = true;
+    else if (rates.size) out.ust = [...rates][0];
+    if (tip) out.trinkgeld = tip;
+
+    // Aussteller: bevorzugt die Zeile mit Rechtsform, sonst erste aussagekräftige Zeile oben
     const AMT1 = new RegExp(AMT.source); // ohne „g“, sonst merkt sich test() die Position
-    out.aussteller = lines.slice(0, 8).find(l => /[a-zäöüß]{3,}/i.test(l) && !GENERIC.test(l) && !/\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/.test(l) && !AMT1.test(l))?.slice(0, 60);
+    const top = lines.slice(0, 10).filter(l => /[a-zäöüß]{3,}/i.test(l) && !GENERIC.test(l) && !/\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/.test(l) && !AMT1.test(l) && !/www\.|\.de\b|\.com\b|@/i.test(l));
+    out.aussteller = (top.find(l => /\b(gmbh|ag|kg|ohg|gbr|ug|e\.\s?k\.?|e\.v\.)\b/i.test(l)) || top[0])?.slice(0, 60);
+    // Ort: Postleitzahl und Ort aus der Anschrift des Ausstellers (oben auf dem Beleg, nicht die Rechnungsanschrift)
+    const PLZ = /(?<!\d)(?:D-?\s?)?(\d{5})\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\- ]{1,40}?)(?=\s{2,}|,|\s+(?:tel|fon|telefon|fax|www|e-?mail|ust|steuer)\b|\s*$)/i;
+    for (const l of lines.slice(0, 10)) {
+      const m = l.match(PLZ);
+      if (m) { out.ort = m[2].replace(/\s+(gmbh|ag|kg|e\.?k\.?)$/i, '').trim(); break; }
+    }
     // Kostenart nach Stichwörtern
     let bestKat = null, bestN = 0;
     for (const [k, re] of KAT) { const n = (low.match(new RegExp(re.source, 'g')) || []).length; if (n > bestN) { bestN = n; bestKat = k; } }

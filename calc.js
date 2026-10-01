@@ -9,7 +9,9 @@ const Calc = (() => {
   const isBew = p => KA(p.kostenart).art === 'bewirtung';
   const betrag = p => (isKm(p) ? Math.round((Number(p.km) || 0) * (p.kmSatz || 0)) : (p.brutto || 0));
   // Die Umsatzsteuer ist im Bruttobetrag enthalten und wird herausgerechnet
-  const ust = p => { const b = betrag(p), s = isKm(p) ? 0 : Number(p.ust) || 0; return b - Math.round(b / (1 + s / 100)); };
+  // Gemischter Beleg (z. B. Speisen 7 %, Getränke 19 %): p.ustSplit = [{ satz, brutto }, …]
+  const teile = p => (isKm(p) ? [{ satz: 0, brutto: betrag(p) }] : p.ustSplit?.length ? p.ustSplit : [{ satz: Number(p.ust) || 0, brutto: betrag(p) }]);
+  const ust = p => teile(p).reduce((a, t) => a + t.brutto - Math.round(t.brutto / (1 + t.satz / 100)), 0);
   const projektOf = (d, p) => String(p.projekt || d.kopf.kostenstelle || '').trim();
 
   /* F-09: Summen. Firmenkarte zahlt die Firma direkt, sie wird nicht erstattet. */
@@ -54,6 +56,8 @@ const Calc = (() => {
         }
         if (p.eigenbeleg && !String(p.eigenbelegGrund || '').trim()) add('Begründung für den Eigenbeleg fehlt.');
         if (!p.belege.length && !p.eigenbeleg) add('Beleg fehlt. Ohne Beleg nur als Eigenbeleg mit Begründung.');
+        if (p.ustSplit?.length && (p.ustSplit.reduce((a, t) => a + t.brutto, 0) !== p.brutto || p.ustSplit.some(t => !(t.brutto > 0))))
+          add('Die Aufteilung auf 7 % und 19 % passt nicht zum Betrag.');
       }
     });
     return out;
@@ -75,7 +79,8 @@ const Calc = (() => {
         bemerkung: t(p.bemerkung), km: isKm(p) ? Number(p.km) : 0, kmSatz: isKm(p) ? p.kmSatz : 0, strecke: isKm(p) ? t(p.strecke) : '',
         bewirtung: isBew(p) ? { anlass: t(p.bewirtung?.anlass), teilnehmer: t(p.bewirtung?.teilnehmer), ort: t(p.bewirtung?.ort) } : null,
         eigenbelegGrund: p.eigenbeleg ? t(p.eigenbelegGrund) : '', belege: isKm(p) ? [] : p.belege.map(b => b.sha256),
-        projekt: projektOf(d, p), digital: isKm(p) ? [] : p.belege.map(b => !!b.digital) // seit 0.3.0
+        projekt: projektOf(d, p), digital: isKm(p) ? [] : p.belege.map(b => !!b.digital), // seit 0.3.0
+        ...(!isKm(p) && p.ustSplit?.length ? { ustSplit: p.ustSplit.map(t => ({ satz: t.satz, brutto: t.brutto })) } : {}) // seit 0.3.1, nur wenn vorhanden
       }))
     };
   }
@@ -108,5 +113,5 @@ const Calc = (() => {
     return out.join('; ');
   }
 
-  return { KA, isKm, isBew, betrag, ust, projektOf, sums, validate, stable, inhalt, pruefsumme, diff };
+  return { KA, isKm, isBew, betrag, ust, teile, projektOf, sums, validate, stable, inhalt, pruefsumme, diff };
 })();

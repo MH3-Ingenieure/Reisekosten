@@ -1,5 +1,13 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.3.1 – 02.10.2026
+
+- Belegerkennung, Steuersatz: zusätzlich ohne %-Zeichen hinter MwSt/USt/Steuersatz und aus Steuerbetrag ÷ (Brutto − Steuer) zurückgerechnet
+- Erkannter (oder von Hand gesetzter) Steuersatz wird bei späterer Wahl der Kostenart nicht mehr durch deren Standardsatz ersetzt
+- Belegerkennung, Ort: Postleitzahl und Ort aus der Anschrift im Kopf des Belegs; Übernahme in Bemerkung, Ort der Bewirtung und leeres Reiseziel
+- Gemischte Steuersätze je Position (p.ustSplit: 7 %, 19 %, 0 % Trinkgeld); Umsatzsteuersatz „gemischt“, bei Bewirtung voreingestellt; geht nur bei Aufteilung in die Prüfsumme ein (ältere Abrechnungen unverändert)
+- Belegerkennung: Steuertabellen („A= 19.0 Netto MwSt Brutto“), Trinkgeld, Datum mit Monatsnamen, Endbetrag in der Folgezeile, Aussteller mit Rechtsform, Stichwort „Total“ nicht mehr als Tankstelle
+
 ## 0.3.0 – 01.10.2026
 
 - Belegerkennung (B-12) im Browser: PDF-Text über pdf.js, Fotos über Tesseract (deutsch); Vorschlag für Kostenart, Betrag, Datum, Umsatzsteuersatz und Aussteller; Hinweis bei gemischten Steuersätzen; abschaltbar im Profil
