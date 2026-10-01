@@ -228,7 +228,9 @@ const Data = (() => {
   let pca = null, account = null, state = 'init', message = '', syncing = false, again = false, timer = null, setupOk = false, pollTimer = null;
   const LOGIN = ['User.Read'];
   const host = () => new URL(cfg.siteUrl).hostname;
-  const SPS = () => [`https://${host()}/AllSites.Manage`];
+  // FullControl wird für Gruppen, Rechtestufe und Listenrechte bei der Einrichtung gebraucht;
+  // die App kann trotzdem nie mehr, als der angemeldete Benutzer in SharePoint darf
+  const SPS = () => [`https://${host()}/AllSites.FullControl`];
   const base = () => cfg.siteUrl.replace(/\/+$/, '');
   const baseUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '');
   const L = t => `web/lists/getbytitle('${t}')`;

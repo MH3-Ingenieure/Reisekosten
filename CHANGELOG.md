@@ -1,5 +1,9 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.2.1 – 01.10.2026
+
+- SharePoint-Berechtigung AllSites.FullControl statt AllSites.Manage: Ohne sie verweigert SharePoint das Anlegen der Gruppen und Listenrechte beim ersten Start („Access is denied“)
+
 ## 0.2.0 – 01.10.2026 (Etappe B: Prüfung und Freigabe)
 
 - Eine Abrechnung ist genau ein Eintrag in RK_Abrechnungen (vorher RK_Entwuerfe); beim Einreichen sperrt der Flow den Eintrag für den Ersteller, bei einer Zurückweisung gibt er ihn wieder frei

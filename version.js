@@ -1,6 +1,11 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.2.0';
+const APP_VERSION = '0.2.1';
 const APP_CHANGES = [
+  {
+    v: '0.2.1', d: '01.10.2026', items: [
+      'Einrichtung: SharePoint-Berechtigung AllSites.FullControl statt AllSites.Manage, damit die App Gruppen und Listenrechte anlegen kann (Fehler „Access is denied“)'
+    ]
+  },
   {
     v: '0.2.0', d: '01.10.2026', items: [
       'Etappe B: kaufmännische Prüfung mit Abhaken je Position, Kommentaren, Ablageort und Häkchen „Alle Belege liegen im Original vor“',
