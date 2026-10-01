@@ -8,17 +8,20 @@ const Calc = (() => {
   const isKm = p => KA(p.kostenart).art === 'km';
   const isBew = p => KA(p.kostenart).art === 'bewirtung';
   const betrag = p => (isKm(p) ? Math.round((Number(p.km) || 0) * (p.kmSatz || 0)) : (p.brutto || 0));
+  // Die Umsatzsteuer ist im Bruttobetrag enthalten und wird herausgerechnet
+  const ust = p => { const b = betrag(p), s = isKm(p) ? 0 : Number(p.ust) || 0; return b - Math.round(b / (1 + s / 100)); };
+  const projektOf = (d, p) => String(p.projekt || d.kopf.kostenstelle || '').trim();
 
   /* F-09: Summen. Firmenkarte zahlt die Firma direkt, sie wird nicht erstattet. */
   function sums(d) {
-    let auslagen = 0, firmenkarte = 0, km = 0;
+    let auslagen = 0, firmenkarte = 0, km = 0, steuer = 0;
     for (const p of d.positionen) {
       const b = betrag(p);
       if (isKm(p)) km += b;
-      else { auslagen += b; if (p.zahlungsart === 'firmenkarte') firmenkarte += b; }
+      else { auslagen += b; steuer += ust(p); if (p.zahlungsart === 'firmenkarte') firmenkarte += b; }
     }
     const vorschuss = d.kopf.vorschuss || 0;
-    return { auslagen, firmenkarte, km, vorschuss, auszahlung: auslagen - firmenkarte + km - vorschuss };
+    return { auslagen, firmenkarte, km, vorschuss, steuer, auszahlung: auslagen - firmenkarte + km - vorschuss };
   }
 
   /* F-08, F-11, B-06: Pflichtfeldprüfung vor dem Einreichen */
@@ -71,7 +74,8 @@ const Calc = (() => {
         datum: p.datum, kostenart: p.kostenart, brutto: betrag(p), ust: isKm(p) ? 0 : Number(p.ust), zahlungsart: isKm(p) ? 'privat' : p.zahlungsart,
         bemerkung: t(p.bemerkung), km: isKm(p) ? Number(p.km) : 0, kmSatz: isKm(p) ? p.kmSatz : 0, strecke: isKm(p) ? t(p.strecke) : '',
         bewirtung: isBew(p) ? { anlass: t(p.bewirtung?.anlass), teilnehmer: t(p.bewirtung?.teilnehmer), ort: t(p.bewirtung?.ort) } : null,
-        eigenbelegGrund: p.eigenbeleg ? t(p.eigenbelegGrund) : '', belege: isKm(p) ? [] : p.belege.map(b => b.sha256)
+        eigenbelegGrund: p.eigenbeleg ? t(p.eigenbelegGrund) : '', belege: isKm(p) ? [] : p.belege.map(b => b.sha256),
+        projekt: projektOf(d, p), digital: isKm(p) ? [] : p.belege.map(b => !!b.digital) // seit 0.3.0
       }))
     };
   }
@@ -95,6 +99,8 @@ const Calc = (() => {
         const parts = [];
         if (a.brutto !== b.brutto) parts.push(`Betrag ${money(a.brutto)} → ${money(b.brutto)}`);
         if (a.kostenart !== b.kostenart) parts.push(`Kostenart ${KA(a.kostenart).name} → ${KA(b.kostenart).name}`);
+        if (a.projekt !== b.projekt) parts.push(`Projekt ${a.projekt || '–'} → ${b.projekt || '–'}`);
+        if (a.km !== b.km) parts.push(`km ${a.km} → ${b.km}`);
         if (stable(a.belege) !== stable(b.belege)) parts.push('Belege geändert');
         out.push(`Position ${i + 1} geändert${parts.length ? ': ' + parts.join(', ') : ''}`);
       }
@@ -102,5 +108,5 @@ const Calc = (() => {
     return out.join('; ');
   }
 
-  return { KA, isKm, isBew, betrag, sums, validate, stable, inhalt, pruefsumme, diff };
+  return { KA, isKm, isBew, betrag, ust, projektOf, sums, validate, stable, inhalt, pruefsumme, diff };
 })();

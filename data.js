@@ -703,6 +703,27 @@ const Data = (() => {
     timer = setTimeout(() => sync().catch(() => {}), 1500);
   }
 
+  /* ---------- Projektliste (RK_Kostenstellen), pflegt der Administrator ---------- */
+  const byName = (a, b) => a.name.localeCompare(b.name, 'de');
+  function localMaster() { S.master.kostenstellen = (S.localProjects || []).filter(p => p.aktiv).map(p => p.name).sort((a, b) => a.localeCompare(b, 'de')); }
+  async function projects() {
+    if (!cloud) return (S.localProjects || []).slice().sort(byName);
+    return (await getAll(`${L('RK_Kostenstellen')}/items?$select=Id,Title,Aktiv&$top=2000`)).map(i => ({ id: i.Id, name: i.Title || '', aktiv: i.Aktiv !== false })).sort(byName);
+  }
+  async function addProject(name) {
+    name = String(name || '').trim();
+    if (!name) throw new Error('Bitte einen Projektnamen eingeben.');
+    if ((await projects()).some(p => p.name.toLowerCase() === name.toLowerCase())) throw new Error(`„${name}“ steht schon in der Projektliste.`);
+    if (!cloud) { (S.localProjects = S.localProjects || []).push({ id: uid(), name, aktiv: true }); localMaster(); persist(); return; }
+    await createItem('RK_Kostenstellen', { Title: name.slice(0, 250), Aktiv: true });
+    await pullMaster(); persist();
+  }
+  async function setProject(id, aktiv) {
+    if (!cloud) { const p = (S.localProjects || []).find(x => x.id === id); if (p) p.aktiv = aktiv; localMaster(); persist(); return; }
+    await updateItem('RK_Kostenstellen', id, { Aktiv: !!aktiv });
+    await pullMaster(); persist();
+  }
+
   /* ---------- Protokoll einer Abrechnung ---------- */
   async function protokoll(c) {
     if (!cloud) return (c.protokoll || []).slice().reverse();
@@ -724,7 +745,7 @@ const Data = (() => {
     notes: id => S.notes.filter(n => n.itemId === id), review: id => (S.review[id] = S.review[id] || { vermerke: {}, ablageort: '' }),
     clearReview: id => { delete S.review[id]; persist(); },
     newDraft, touch, removeDraft, fileOf, act, protokoll, persist,
-    members, addMember, removeMember, GROUPS,
+    members, addMember, removeMember, GROUPS, projects, addProject, setProject,
     setLocalName: n => { if (!cloud) { S.user.name = n; S.user.mail = n.trim().toLowerCase().replace(/\s+/g, '.') + '@lokal'; persist(); } },
     inTeams: () => teamsMode, signedIn: () => !cloud || !!account, Flow
   };

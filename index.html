@@ -36,14 +36,18 @@
 <input type="file" id="pick-camera" accept="image/*" capture="environment" hidden>
 <input type="file" id="pick-file" accept="image/*,application/pdf,.pdf" multiple hidden><!-- ohne ausdrückliches HEIC liefert iOS Fotos als JPEG -->
 <input type="file" id="pick-signature" accept="image/jpeg,image/png" hidden>
+<input type="file" id="pick-import" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden>
 <script src="https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.30.0/lib/msal-browser.min.js" integrity="sha384-YnOjsoOxSYo65h1BXWnSq24bFbqW8HfzMWSEQxYEMRmjW9Vl1J3HZI3iZxqNYvIi" crossorigin="anonymous" defer></script>
 <script src="config.js" defer></script>
 <script src="version.js" defer></script>
 <script src="media.js" defer></script>
 <script src="calc.js" defer></script>
+<script src="xlsx.js" defer></script>
+<script src="ocr.js" defer></script>
 <script src="data.js" defer></script>
 <script src="teams.js" defer></script>
 <script src="review.js" defer></script>
+<script src="import.js" defer></script>
 <script src="app.js" defer></script>
 </body>
 </html>

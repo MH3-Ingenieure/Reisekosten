@@ -1,5 +1,16 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.3.0 – 01.10.2026
+
+- Belegerkennung (B-12) im Browser: PDF-Text über pdf.js, Fotos über Tesseract (deutsch); Vorschlag für Kostenart, Betrag, Datum, Umsatzsteuersatz und Aussteller; Hinweis bei gemischten Steuersätzen; abschaltbar im Profil
+- Neue Position: Beleg zuerst fotografieren oder wählen, die Kostenart ergibt sich aus dem Beleg
+- Fahrtenimport aus Excel (.xlsx) oder CSV mit Prüfung je Zeile und Vorschau; Vorlage mit Auswahlliste der Projekte
+- Projekt je Position (vorbelegt mit dem Projekt der Reise); geht in die Prüfsumme ein
+- Projektliste unter „Verwaltung“ pflegen (vorher Reiter „Rollen“), auch im lokalen Testbetrieb
+- Umsatzsteuer: enthaltener Betrag je Position und in den Summen
+- Beleg „digitales Original“ (PDF vorbelegt); geht in die Prüfsumme ein; Prüfung sieht die Zahl der erwarteten Papierbelege
+- Ort der Bewirtung mit dem Reiseziel vorbelegt
+
 ## 0.2.1 – 01.10.2026
 
 - SharePoint-Berechtigung AllSites.FullControl statt AllSites.Manage: Ohne sie verweigert SharePoint das Anlegen der Gruppen und Listenrechte beim ersten Start („Access is denied“)

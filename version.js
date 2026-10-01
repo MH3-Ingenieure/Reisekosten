@@ -1,6 +1,16 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.2.1';
+const APP_VERSION = '0.3.0';
 const APP_CHANGES = [
+  {
+    v: '0.3.0', d: '01.10.2026', items: [
+      'Belegerkennung: Foto oder PDF zuerst – die App liest Kostenart, Betrag, Datum, Umsatzsteuer und Aussteller aus (läuft auf dem Gerät, ohne Lizenz)',
+      'Fahrten mit dem Privat-Pkw aus einer Excel-Liste übernehmen; Vorlage mit Projektauswahl zum Herunterladen',
+      'Projekt je Position; eigene Projektliste, gepflegt unter „Verwaltung“',
+      'Anzeige der im Bruttobetrag enthaltenen Umsatzsteuer je Position und in den Summen',
+      'Beleg als „digitales Original“ kennzeichnen (z. B. PDF-Rechnung per E-Mail); die Prüfung sieht, welche Papierbelege erwartet werden',
+      'Ort der Bewirtung wird mit dem Reiseziel vorbelegt'
+    ]
+  },
   {
     v: '0.2.1', d: '01.10.2026', items: [
       'Einrichtung: SharePoint-Berechtigung AllSites.FullControl statt AllSites.Manage, damit die App Gruppen und Listenrechte anlegen kann (Fehler „Access is denied“)'

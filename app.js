@@ -37,7 +37,7 @@ const fmtDT = s => (s ? fmtDate(s) + ' ' + s.slice(11, 16) : '');
 const fmtTs = ts => new Date(ts).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const fmtSize = b => (b >= 1048576 ? (b / 1048576).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
 
-const { KA, isKm, isBew, betrag, sums, validate, inhalt, pruefsumme } = Calc; // Rechenregeln: calc.js
+const { KA, isKm, isBew, betrag, projektOf, sums, validate, inhalt, pruefsumme } = Calc; // Rechenregeln: calc.js
 const ZAHLUNG = { privat: 'privat', firmenkarte: 'Firmenkarte', bar: 'bar' };
 
 /* ---------- Symbole ---------- */
@@ -89,7 +89,7 @@ function renderTabs(r) {
   const tabs = [['', 'Meine Reisekosten', 'list', 0]];
   if (R.pruefung) tabs.push(['pruefung', 'Prüfung', 'shield', open('Eingereicht') + open('Freigegeben')]);
   if (R.freigabe) tabs.push(['freigabe', 'Freigabe', 'check', open('Geprüft')]);
-  if (R.admin && Data.cloud) tabs.push(['rollen', 'Rollen', 'users', 0]);
+  if (R.admin) tabs.push(['rollen', 'Verwaltung', 'users', 0]);
   nav.hidden = tabs.length < 2;
   const cur = r === 'reise' ? UI.lastTab || '' : ['pruefung', 'freigabe', 'rollen'].includes(r) ? r : '';
   if (r !== 'reise') UI.lastTab = cur;
@@ -121,6 +121,8 @@ function homeView() {
   return `<div class="page">
     ${localBanner()}
     <div class="page-head"><h1>Meine Reisekosten</h1><button class="btn primary" data-action="new">${ic('plus')} NEUE REISE</button></div>
+    <div class="home-tools"><button class="btn ghost small" data-action="import-pick">${ic('file')} Fahrten aus Excel übernehmen</button>
+      <button class="link small" data-action="import-template">Excel-Vorlage für Fahrten herunterladen</button></div>
     ${drafts.length ? `<h2 class="sec">In Bearbeitung</h2><div class="trips">${drafts.map(d => card(d)).join('')}</div>` : ''}
     ${claims.length ? `<h2 class="sec">Eingereicht</h2><div class="trips">${claims.map(c => card(c)).join('')}</div>` : ''}
     ${!drafts.length && !claims.length ? `<div class="empty"><p><b>Noch keine Reise erfasst.</b></p><p class="muted">Mit „Neue Reise“ anlegen, Kosten mit Beleg erfassen und zum Schluss unterschreiben und einreichen.</p></div>` : ''}
@@ -180,13 +182,15 @@ function posRow(d, p, i, err, ro) {
   const ka = KA(p.kostenart);
   const sub = isKm(p) ? `${esc(p.strecke || '')} · ${numIn(p.km)} km × ${money(p.kmSatz)}`
     : isBew(p) ? esc([p.bewirtung?.anlass, p.bemerkung].filter(Boolean).join(' · ')) : esc(p.bemerkung || '');
-  const bel = isKm(p) ? '' : p.belege.length ? `<span class="belcount">${ic('clip')}${p.belege.length}</span>`
+  const dig = p.belege.filter(b => b.digital).length;
+  const bel = isKm(p) ? '' : p.belege.length ? `<span class="belcount">${ic('clip')}${p.belege.length}${dig ? ` · ${dig === p.belege.length ? 'digital' : dig + ' digital'}` : ''}</span>`
     : p.eigenbeleg ? '<span class="belcount eigen">Eigenbeleg</span>' : `<span class="belcount miss">${ic('warn')}kein Beleg</span>`;
+  const proj = projektOf(d, p), projNote = proj && proj !== String(d.kopf.kostenstelle || '').trim() ? `<span class="pos-sub">Projekt: ${esc(proj)}</span>` : '';
   const eigen = p.eigenbeleg && ro ? `<span class="pos-note warn">Eigenbeleg: ${esc(p.eigenbelegGrund || '')}</span>` : ''; // B-06: in der Prüfung sichtbar
   const note = d.pruefung?.[p.id]?.kommentar ? `<span class="pos-note">Prüfung: ${esc(d.pruefung[p.id].kommentar)}</span>` : '';
   return `<button class="pos-row${err ? ' err' : ''}" data-action="${ro ? 'view-pos' : 'edit-pos'}" data-id="${esc(p.id)}">
     <span class="pos-n">${i + 1}</span>
-    <span class="pos-main"><b>${esc(ka.name)}</b> <span class="muted">${fmtDate(p.datum)}</span>${sub ? `<span class="pos-sub">${sub}</span>` : ''}${eigen}${note}</span>
+    <span class="pos-main"><b>${esc(ka.name)}</b> <span class="muted">${fmtDate(p.datum)}</span>${sub ? `<span class="pos-sub">${sub}</span>` : ''}${projNote}${eigen}${note}</span>
     <span class="pos-side"><b>${money(betrag(p))}</b><span class="muted small">${isKm(p) ? 'Kilometergeld' : esc(ZAHLUNG[p.zahlungsart] || '')}</span>${bel}</span></button>`;
 }
 function sumsHTML(d) {
@@ -194,6 +198,7 @@ function sumsHTML(d) {
   return `<table class="sums">
     <tr><td>Auslagen gesamt</td><td>${money(s.auslagen)}</td></tr>
     ${s.firmenkarte ? `<tr class="muted"><td>davon mit Firmenkarte bezahlt (wird nicht erstattet)</td><td>− ${money(s.firmenkarte)}</td></tr>` : ''}
+    ${s.steuer ? `<tr class="muted"><td>darin enthaltene Umsatzsteuer (herausgerechnet)</td><td>${money(s.steuer)}</td></tr>` : ''}
     <tr><td>Kilometergeld</td><td>${money(s.km)}</td></tr>
     ${s.vorschuss ? `<tr><td>Erhaltener Vorschuss</td><td>− ${money(s.vorschuss)}</td></tr>` : ''}
     <tr class="total"><td>${s.auszahlung < 0 ? 'Rückzahlung an die Firma' : 'Auszahlungsbetrag'}</td><td>${money(Math.abs(s.auszahlung))}</td></tr></table>`;
@@ -217,6 +222,10 @@ function profileView() {
         <button class="btn ghost small" data-action="sig-upload">${ic('file')} Bild hochladen (JPEG, PNG)</button>
         ${sig ? `<button class="btn danger-ghost small" data-action="sig-del">${ic('trash')} Entfernen</button>` : ''}</div>
     </div></div>
+    <div class="card"><div class="card-head">Belegerkennung</div><div class="card-body">
+      <label class="check" style="margin:0"><input type="checkbox" data-action-input="ocr-toggle"${Ocr.enabled() ? ' checked' : ''}> Belege automatisch auslesen (Kostenart, Betrag, Datum, Umsatzsteuer)</label>
+      <p class="muted small" style="margin-bottom:0">Die Erkennung läuft auf diesem Gerät; Belege werden dafür nicht verschickt. Beim ersten Foto lädt sie einmalig einige Megabyte. Auf langsamen Geräten kann sie hier abgeschaltet werden.</p>
+    </div></div>
     ${Teams.cardHTML()}
     <div class="card"><div class="card-head">Version ${esc(APP_VERSION)}</div><div class="card-body">
       ${APP_CHANGES.map(c => `<p style="margin:0 0 4px"><b>${esc(c.v)}</b> <span class="muted">(${esc(c.d)})</span></p><ul class="changes">${c.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>`).join('')}
@@ -231,13 +240,17 @@ function helpView() {
     <div class="card"><div class="card-body help">
       <h3>So rechnen Sie eine Reise ab</h3>
       <ol><li><b>Neue Reise</b> antippen und Reisezweck, Projekt, Ziel sowie Beginn und Ende eintragen.</li>
-        <li>Für jede Ausgabe <b>+ Position</b>: Kostenart wählen, Betrag eintragen, Beleg fotografieren, speichern.</li>
+        <li>Für jede Ausgabe <b>+ Position</b>: am schnellsten zuerst den Beleg fotografieren – die App liest Kostenart, Betrag, Datum und Umsatzsteuer aus. Werte prüfen, speichern.</li>
+        <li>Baustellenfahrten eines Monats: Startseite → <b>Excel-Vorlage für Fahrten herunterladen</b>, im Laufe des Monats je Fahrt eine Zeile mit Projekt ausfüllen, am Monatsende <b>Fahrten aus Excel übernehmen</b>.</li>
         <li>Fahrten mit dem eigenen Pkw als <b>Privat-Pkw (Kilometer)</b> erfassen – der Betrag wird aus den Kilometern berechnet, ein Beleg ist nicht nötig.</li>
         <li>Zum Schluss <b>Unterschreiben und einreichen</b>. Die App prüft vorher, ob alle Pflichtangaben vorhanden sind.</li></ol>
       <h3>Gut zu wissen</h3>
       <ul><li>Alles wird automatisch gespeichert. Sie können am Smartphone anfangen und am PC weitermachen.</li>
         <li>Belege: PDF, JPG, PNG oder HEIC, höchstens 10 MB. Große Fotos verkleinert die App selbst.</li>
         <li>Beleg verloren? Bei der Position „Eigenbeleg“ ankreuzen und begründen.</li>
+        <li>Rechnung nur digital erhalten (z. B. PDF per E-Mail)? Beim Beleg „digitales Original“ ankreuzen – dann wird kein Papier im Büro erwartet. Bei PDF-Dateien ist das vorbelegt.</li>
+        <li>Der Betrag ist immer der Bruttobetrag laut Beleg. Die Umsatzsteuer ist darin enthalten; die App rechnet sie für die Buchhaltung heraus.</li>
+        <li>Gehört eine Ausgabe zu einem anderen Projekt als die Reise, bei der Position das Projekt ändern.</li>
         <li>Bewirtungen brauchen Anlass, Teilnehmer und Ort.</li>
         <li>Mit Firmenkarte bezahlte Beträge werden mit abgerechnet, aber nicht an Sie ausgezahlt.</li>
         <li>Nach dem Einreichen kann die Abrechnung nicht mehr geändert werden. Die Originalbelege bitte im Büro abgeben.</li></ul>
@@ -249,57 +262,94 @@ function helpView() {
    ===================================================================== */
 function blankPos(d) {
   const last = d.positionen[d.positionen.length - 1];
-  return { id: uid(), datum: last?.datum || (d.kopf.beginn || '').slice(0, 10) || todayStr(), kostenart: '', brutto: 0, ust: 19, zahlungsart: 'privat', bemerkung: '', km: 0, kmSatz: 0, strecke: '', bewirtung: { anlass: '', teilnehmer: '', ort: '' }, eigenbeleg: false, eigenbelegGrund: '', belege: [] };
+  return {
+    id: uid(), datum: last?.datum || (d.kopf.beginn || '').slice(0, 10) || todayStr(), kostenart: '', brutto: 0, ust: 19, zahlungsart: 'privat', bemerkung: '',
+    km: 0, kmSatz: 0, strecke: '', projekt: last?.projekt || d.kopf.kostenstelle || '', bewirtung: { anlass: '', teilnehmer: '', ort: '' }, eigenbeleg: false, eigenbelegGrund: '', belege: []
+  };
 }
 function openPos(d, p, ro = false) {
   const isNew = !p;
   const w = clone(p || blankPos(d));
   w.bewirtung = w.bewirtung || { anlass: '', teilnehmer: '', ort: '' };
-  UI.pos = { draftId: d.id, p: w, isNew, ro, added: [], removed: [], busy: 0, raw: { brutto: moneyIn(w.brutto), km: numIn(w.km) } };
+  if (w.projekt === undefined) w.projekt = d.kopf.kostenstelle || '';
+  UI.pos = { draftId: d.id, p: w, isNew, ro, added: [], removed: [], busy: 0, raw: { brutto: moneyIn(w.brutto), km: numIn(w.km) }, ocr: null, touched: {} };
   renderPos();
   if (isNew) setTimeout(() => $('.ka-grid button')?.focus(), 50);
 }
+// Umsatzsteuer ist im Bruttobetrag enthalten und wird herausgerechnet
+function ustText(p, raw) {
+  const b = parseMoney(raw), s = Number(p.ust) || 0;
+  if (Number.isNaN(b) || !b) return '';
+  const net = Math.round(b / (1 + s / 100));
+  return s ? `darin ${money(b - net)} Umsatzsteuer (${s} %), netto ${money(net)}` : 'ohne Umsatzsteuer';
+}
+function belegeHTML(p, ro, s) {
+  return `<div class="belege">
+    ${p.belege.map(b => `<div class="bel"><button type="button" class="bel-open" data-action="bel-open" data-id="${esc(b.id)}" title="${esc(b.name)}">
+      ${b.thumb ? `<img src="${b.thumb}" alt="">` : `<span class="bel-ic">${ic('file')}<small>${b.type === 'application/pdf' ? 'PDF' : 'Bild'}</small></span>`}</button>
+      <span class="bel-name">${esc(b.name)} · ${fmtSize(b.size)}</span>
+      ${ro ? (b.digital ? '<span class="bel-tag">digitales Original</span>' : '<span class="bel-tag paper">Papierbeleg</span>')
+        : `<label class="bel-dig" title="Ankreuzen, wenn es keinen Papierbeleg gibt (z. B. Rechnung per E-Mail)"><input type="checkbox" data-dig="${esc(b.id)}"${b.digital ? ' checked' : ''}> digitales Original</label>
+        <button type="button" class="bel-del" data-action="bel-del" data-id="${esc(b.id)}" aria-label="Beleg entfernen">${ic('x')}</button>`}</div>`).join('')}
+    ${s.busy ? `<div class="bel busy"><span class="spinner"></span><span class="bel-name">wird verarbeitet …</span></div>` : ''}
+    ${ro ? '' : `<button type="button" class="bel-add" data-action="bel-camera">${ic('camera')}<span>Foto aufnehmen</span></button>
+      <button type="button" class="bel-add" data-action="bel-file">${ic('file')}<span>Datei wählen</span></button>`}
+  </div>`;
+}
+function ocrHTML(s) {
+  const o = s.ocr;
+  if (!o) return '';
+  if (o.state === 'run') return `<div class="ocr run"><span class="spinner"></span><div>Beleg wird gelesen …${o.first ? ' Beim ersten Mal lädt die Erkennung einmalig einige Megabyte.' : ''}</div></div>`;
+  if (o.state === 'err') return `<div class="ocr bad">${ic('warn')}<div>Beleg konnte nicht gelesen werden: ${esc(o.msg)}</div></div>`;
+  const f = o.found, parts = [];
+  if (f.kostenart) parts.push(KA(f.kostenart).name);
+  if (f.brutto) parts.push(money(f.brutto));
+  if (f.datum) parts.push(fmtDate(f.datum));
+  if (f.ust != null) parts.push(f.ust + ' % USt');
+  if (f.aussteller) parts.push(f.aussteller);
+  return `<div class="ocr ok">${ic('check')}<div>${parts.length ? 'Aus dem Beleg übernommen: <b>' + esc(parts.join(' · ')) + '</b>. Bitte prüfen.' : 'Auf dem Beleg wurden keine Angaben erkannt – bitte von Hand eintragen.'}
+    <button type="button" class="link" data-action="ocr-run">erneut lesen</button>
+    ${f.mixed ? '<br><b>Achtung:</b> Der Beleg enthält 7 % und 19 % Umsatzsteuer (z. B. Übernachtung und Frühstück). Steuersatz bitte prüfen und den Beleg bei Bedarf auf zwei Positionen aufteilen.' : ''}</div></div>`;
+}
 function renderPos() {
   const s = UI.pos, p = s.p, ro = s.ro, ka = p.kostenart ? KA(p.kostenart) : null;
-  const d = Data.draft(s.draftId) || Data.claim(s.draftId);
   const dis = ro ? ' disabled' : '';
   const inp = (label, f, val, extra = '') => `<label class="fld"><span>${label}</span><input data-p="${f}" value="${esc(val)}"${extra}${dis}></label>`;
   const kas = Data.master().kostenarten.filter(k => k.aktiv !== false || k.key === p.kostenart);
+  const projekt = inp('Projekt / Kostenstelle', 'projekt', p.projekt || '', ' list="dl-proj" placeholder="Projekt oder Kostenstelle" autocomplete="off"');
+  let body = '';
+  // Neue Position ohne Kostenart: zuerst den Beleg erfassen, die App liest Kostenart, Betrag und Datum aus (B-12)
+  if (!ka && !ro && Ocr.enabled()) body += `<div class="quick"><div class="quick-t">${ic('camera')}<span><b>Am schnellsten:</b> zuerst den Beleg fotografieren oder die Datei wählen – die App liest Kostenart, Betrag und Datum aus.</span></div>
+    ${belegeHTML(p, ro, s)}${ocrHTML(s)}</div>`;
   // Kostenart: Tastenfeld zur Auswahl, danach eingeklappt (wenige Bedienschritte, N-08)
-  let body = ka && !s.pickKa
+  body += ka && !s.pickKa
     ? `<div class="fld"><span>Kostenart</span><div class="ka-chosen"><b>${esc(ka.name)}</b>${ro ? '' : '<button type="button" class="link" data-action="pos-ka-change">ändern</button>'}</div></div>`
-    : `<div class="fld"><span>Kostenart</span><div class="ka-grid">${kas.map(k => `<button type="button" class="ka${k.key === p.kostenart ? ' on' : ''}" data-action="pos-ka" data-key="${esc(k.key)}"${dis}>${esc(k.name)}</button>`).join('')}</div></div>`;
+    : `<div class="fld"><span>Kostenart${!ro && !ka ? ' – oder ohne Beleg direkt wählen' : ''}</span><div class="ka-grid">${kas.map(k => `<button type="button" class="ka${k.key === p.kostenart ? ' on' : ''}" data-action="pos-ka" data-key="${esc(k.key)}"${dis}>${esc(k.name)}</button>`).join('')}</div></div>`;
   if (ka) {
     if (ka.art === 'km') {
       const satz = ro ? p.kmSatz : Data.kmSatz(p.datum), km = parseNum(s.raw.km);
       body += `<div class="grid">${inp('Strecke (von – nach)', 'strecke', p.strecke, ' placeholder="z. B. Düsseldorf – Essen und zurück"')}
         ${inp('Kilometer', 'km', s.raw.km, ' inputmode="decimal" placeholder="0"')}
         ${inp('Datum', 'datum', p.datum, ' type="date"')}
-        <div class="fld"><span>Kilometergeld</span><div class="calc" id="km-calc">${Number.isNaN(km) ? 'Kilometer ungültig' : `${numIn(km) || 0} km × ${money(satz)} = <b>${money(Math.round(km * satz))}</b>`}</div></div></div>`;
+        <div class="fld"><span>Kilometergeld</span><div class="calc" id="km-calc">${Number.isNaN(km) ? 'Kilometer ungültig' : `${numIn(km) || 0} km × ${money(satz)} = <b>${money(Math.round(km * satz))}</b>`}</div></div>
+        ${projekt}</div>`;
     } else {
       body += `<div class="grid">${inp('Betrag brutto (€)', 'brutto', s.raw.brutto, ' inputmode="decimal" placeholder="0,00" class="big-in"')}
-        ${inp('Datum', 'datum', p.datum, ' type="date"')}</div>`;
-    }
-    if (ka.art !== 'km') {
-      body += `<div class="fld"><span>Belege</span><div class="belege">
-        ${p.belege.map(b => `<div class="bel"><button type="button" class="bel-open" data-action="bel-open" data-id="${esc(b.id)}" title="${esc(b.name)}">
-          ${b.thumb ? `<img src="${b.thumb}" alt="">` : `<span class="bel-ic">${ic('file')}<small>${b.type === 'application/pdf' ? 'PDF' : 'Bild'}</small></span>`}</button>
-          <span class="bel-name">${esc(b.name)} · ${fmtSize(b.size)}</span>
-          ${ro ? '' : `<button type="button" class="bel-del" data-action="bel-del" data-id="${esc(b.id)}" aria-label="Beleg entfernen">${ic('x')}</button>`}</div>`).join('')}
-        ${s.busy ? `<div class="bel busy"><span class="spinner"></span><span class="bel-name">wird verarbeitet …</span></div>` : ''}
-        ${ro ? '' : `<button type="button" class="bel-add" data-action="bel-camera">${ic('camera')}<span>Foto aufnehmen</span></button>
-          <button type="button" class="bel-add" data-action="bel-file">${ic('file')}<span>Datei wählen</span></button>`}
-        </div></div>
+        ${inp('Datum', 'datum', p.datum, ' type="date"')}</div>
+        <p class="calc-line" id="ust-calc">${ustText(p, s.raw.brutto)}</p>
+        <div class="fld"><span>Belege</span>${belegeHTML(p, ro, s)}</div>${ocrHTML(s)}
         <label class="check"><input type="checkbox" data-p="eigenbeleg"${p.eigenbeleg ? ' checked' : ''}${dis}> Eigenbeleg – der Originalbeleg ist verloren gegangen</label>
         ${p.eigenbeleg ? `<label class="fld"><span>Begründung für den Eigenbeleg</span><textarea data-p="eigenbelegGrund" rows="2"${dis}>${esc(p.eigenbelegGrund)}</textarea></label>` : ''}
         <div class="grid"><label class="fld"><span>Umsatzsteuersatz</span><select data-p="ust"${dis}>${[19, 7, 0].map(v => `<option value="${v}"${Number(p.ust) === v ? ' selected' : ''}>${v} %</option>`).join('')}</select></label>
-        <div class="fld"><span>Zahlungsart</span><div class="seg">${Object.entries(ZAHLUNG).map(([k, l]) => `<button type="button" class="${p.zahlungsart === k ? 'on' : ''}" data-action="pos-pay" data-key="${k}"${dis}>${l}</button>`).join('')}</div></div></div>`;
+        <div class="fld"><span>Zahlungsart</span><div class="seg">${Object.entries(ZAHLUNG).map(([k, l]) => `<button type="button" class="${p.zahlungsart === k ? 'on' : ''}" data-action="pos-pay" data-key="${k}"${dis}>${l}</button>`).join('')}</div></div>
+        ${projekt}</div>`;
       if (ka.art === 'bewirtung') body += `<div class="sub-card"><div class="sub-title">Bewirtung (Pflichtangaben)</div><div class="grid">
         ${inp('Anlass', 'bew.anlass', p.bewirtung.anlass)}${inp('Ort der Bewirtung', 'bew.ort', p.bewirtung.ort, ' placeholder="Name und Ort des Lokals"')}
         <label class="fld wide"><span>Teilnehmer (Name, Firma)</span><textarea data-p="bew.teilnehmer" rows="3"${dis}>${esc(p.bewirtung.teilnehmer)}</textarea></label></div></div>`;
     }
     body += `<label class="fld" style="margin-top:12px"><span>Bemerkung</span><input data-p="bemerkung" value="${esc(p.bemerkung)}"${dis}></label>`;
   }
+  body += `<datalist id="dl-proj">${Data.master().kostenstellen.map(x => `<option value="${esc(x)}">`).join('')}</datalist>`;
   const scroll = $('.modal-body')?.scrollTop || 0;
   $('#modal-root').innerHTML = `<div class="modal-back"><div class="modal sheet" role="dialog" aria-label="Position">
     <div class="modal-head"><h2>${ro ? 'Position' : s.isNew ? 'Neue Position' : 'Position bearbeiten'}</h2><button class="icon-btn" data-action="pos-cancel" aria-label="Schließen">${ic('x')}</button></div>
@@ -316,34 +366,68 @@ function posInput(el) {
   if (f === 'brutto' || f === 'km') {
     s.raw[f] = el.value;
     if (f === 'km') { const km = parseNum(el.value), satz = Data.kmSatz(p.datum); $('#km-calc').innerHTML = Number.isNaN(km) ? 'Kilometer ungültig' : `${numIn(km) || 0} km × ${money(satz)} = <b>${money(Math.round(km * satz))}</b>`; }
+    else if ($('#ust-calc')) $('#ust-calc').textContent = ustText(p, s.raw.brutto);
     return;
   }
   if (f.startsWith('bew.')) { p.bewirtung[f.slice(4)] = el.value; return; }
   p[f] = f === 'ust' ? Number(el.value) : el.value;
+  if (f === 'datum' || f === 'ust') s.touched[f] = true; // von Hand gesetzt: Belegerkennung überschreibt das nicht
+  if (f === 'ust' && $('#ust-calc')) $('#ust-calc').textContent = ustText(p, s.raw.brutto);
   if (f === 'datum' && isKm(p)) posInput($('[data-p="km"]'));
 }
 async function addFiles(files) {
   const s = UI.pos;
   if (!s) return;
   const all = [...Data.drafts(), ...Data.claims()].flatMap(d => d.positionen.flatMap(p => p.belege.map(b => ({ b, d }))));
+  let neu = null;
   for (const f of files) {
     s.busy++; renderPos();
     try {
       const r = await Media.prepare(f), id = uid();
       await Media.put(id, r.blob);
       const dup = all.find(x => x.b.sha256 === r.sha256) || s.p.belege.find(b => b.sha256 === r.sha256);
-      s.p.belege.push({ id, name: r.name, type: r.type, size: r.size, sha256: r.sha256, thumb: r.thumb, uploaded: false });
+      // PDF kommt meist per E-Mail: dann ist die Datei selbst das Original (kein Papierbeleg)
+      neu = { id, name: r.name, type: r.type, size: r.size, sha256: r.sha256, thumb: r.thumb, uploaded: false, digital: r.type === 'application/pdf' };
+      s.p.belege.push(neu);
       s.added.push(id);
       if (dup) toast(`Hinweis: Diese Datei ist bereits als Beleg erfasst${dup.d ? ` (Reise „${dup.d.kopf.zweck || 'ohne Zweck'}“)` : ''}. Bitte prüfen, ob sie doppelt abgerechnet wird.`, 7000); // B-10
       else if (r.converted) toast(`Foto verkleinert auf ${fmtSize(r.size)}.`);
     } catch (e) { toast(e.message, 8000); }
     finally { if (UI.pos === s) { s.busy--; renderPos(); } }
   }
+  // Belegerkennung, solange noch kein Betrag eingetragen ist
+  if (neu && UI.pos === s && Ocr.enabled() && !parseMoney(s.raw.brutto)) runOcr(neu, false);
+}
+async function runOcr(b, force) {
+  const s = UI.pos;
+  if (!s || !b) return;
+  const d = Data.draft(s.draftId) || Data.claim(s.draftId);
+  s.ocr = { state: 'run', first: !Ocr.ready() && b.type !== 'application/pdf' };
+  renderPos();
+  try {
+    const blob = (await Media.get(b.id).catch(() => null)) || (d && await Data.fileOf(d, b));
+    if (!blob) throw new Error('Datei nicht gefunden.');
+    const f = await Ocr.recognize(blob);
+    if (UI.pos !== s) return;
+    const p = s.p, used = {};
+    if (f.kostenart && (!p.kostenart || force)) { const k = KA(f.kostenart); if (k.art !== 'km') { p.kostenart = k.key; p.ust = k.ust; used.kostenart = k.key; } }
+    if (f.brutto && (!parseMoney(s.raw.brutto) || force)) { s.raw.brutto = moneyIn(f.brutto); used.brutto = f.brutto; }
+    if (f.datum && (!s.touched.datum || force)) { p.datum = f.datum; used.datum = f.datum; }
+    if (f.ust != null && (!s.touched.ust || force)) { p.ust = f.ust; used.ust = f.ust; }
+    if (f.aussteller && (!p.bemerkung || force)) { p.bemerkung = f.aussteller; used.aussteller = f.aussteller; }
+    if (f.mixed) used.mixed = true;
+    if (isBew(p) && !p.bewirtung.ort) p.bewirtung.ort = [f.aussteller, d?.kopf.ort].filter(Boolean).join(', ');
+    s.ocr = { state: 'ok', found: used };
+  } catch (e) {
+    if (UI.pos === s) s.ocr = { state: 'err', msg: e.message };
+  }
+  if (UI.pos === s) renderPos();
 }
 function closePos() { $('#modal-root').innerHTML = ''; UI.pos = null; if (UI.pendingRender) render(); }
 function savePos() {
   const s = UI.pos, d = Data.draft(s.draftId), p = s.p;
   if (!d || s.busy) return;
+  p.projekt = String(p.projekt || '').trim() || String(d.kopf.kostenstelle || '').trim();
   if (isKm(p)) {
     const km = parseNum(s.raw.km);
     if (Number.isNaN(km)) return toast('Bitte die Kilometer als Zahl eintragen.');
@@ -483,6 +567,7 @@ const ACTIONS = {
     const p = UI.pos.p, ka = KA(el.dataset.key);
     p.kostenart = ka.key; p.ust = ka.ust; UI.pos.pickKa = false;
     if (ka.art === 'km') p.zahlungsart = 'privat';
+    if (ka.art === 'bewirtung' && !p.bewirtung.ort) { const d = Data.draft(UI.pos.draftId); p.bewirtung.ort = d?.kopf.ort || ''; } // meist der Ort der Reise
     renderPos();
     setTimeout(() => $(ka.art === 'km' ? '[data-p="strecke"]' : '[data-p="brutto"]')?.focus(), 30);
   },
@@ -498,6 +583,7 @@ const ACTIONS = {
     dropFiles(d, [...(orig?.belege || []), ...s.p.belege.filter(b => s.added.includes(b.id))]);
     Data.touch(d); closePos(); render();
   },
+  'ocr-run': () => { const s = UI.pos; if (s?.p.belege.length) runOcr(s.p.belege[s.p.belege.length - 1], true); },
   'bel-camera': () => $('#pick-camera').click(),
   'bel-file': () => $('#pick-file').click(),
   'bel-del': el => {
@@ -538,7 +624,7 @@ const ACTIONS = {
   'teams-package': () => Teams.download(),
   'sig-del': () => { if (confirm('Hinterlegte Unterschrift entfernen?')) { localStorage.removeItem(SIG_KEY); render(); } }
 };
-Object.assign(ACTIONS, Review.actions); // Prüfung, Freigabe, Rollen (review.js)
+Object.assign(ACTIONS, Review.actions, Import.actions); // Prüfung, Freigabe, Verwaltung (review.js), Fahrtenimport (import.js)
 
 document.addEventListener('click', e => {
   const el = e.target.closest('[data-action]');
@@ -550,6 +636,8 @@ document.addEventListener('input', e => {
   const el = e.target;
   if (el.dataset.p !== undefined && UI.pos) return posInput(el);
   if ((el.dataset.rv !== undefined || el.dataset.rf !== undefined) && el.type !== 'checkbox' && el.tagName !== 'SELECT') { if (el.dataset.rv !== 'datum') Review.onInput(el); return; }
+  if (el.dataset.actionInput === 'ocr-toggle') { Ocr.setEnabled(el.checked); toast(el.checked ? 'Belegerkennung eingeschaltet.' : 'Belegerkennung ausgeschaltet.'); return; }
+  if (el.dataset.dig && UI.pos) { const b = UI.pos.p.belege.find(x => x.id === el.dataset.dig); if (b) b.digital = el.checked; return; }
   if (el.dataset.actionInput === 'local-name') { Data.setLocalName(el.value); $('#user-name').textContent = el.value; return; }
   if (el.dataset.k) {
     const d = current();
@@ -571,8 +659,10 @@ document.addEventListener('change', async e => {
     if (el.tagName === 'SELECT') return posInput(el);
   }
   if ((el.dataset.rv !== undefined && el.type === 'checkbox') || el.dataset.rf === 'status') return Review.onInput(el);
+  if (el.dataset.proj) return Review.toggleProject(el);
   if (el.dataset.k === 'vorschuss') { const d = current(); if (d) el.value = moneyIn(d.kopf.vorschuss); }
   if (el.id === 'pick-camera' || el.id === 'pick-file') { const files = [...el.files]; el.value = ''; await addFiles(files); }
+  if (el.id === 'pick-import') { const f = el.files[0]; el.value = ''; if (f) await Import.onFile(f); }
   if (el.id === 'pick-signature') {
     const f = el.files[0]; el.value = '';
     if (!f) return;

@@ -85,10 +85,12 @@ const Review = (() => {
   const allChecked = (c, rv) => c.positionen.length > 0 && c.positionen.every(p => rv.vermerke[p.id]?.geprueft);
   function checkPanel(c, rv) {
     const n = c.positionen.filter(p => rv.vermerke[p.id]?.geprueft).length, all = allChecked(c, rv);
+    const belege = c.positionen.flatMap(p => p.belege), dig = belege.filter(b => b.digital).length, papier = belege.length - dig;
     return `<div class="card panel"><div class="card-head">${ic('shield')} Kaufmännische Prüfung</div><div class="card-body">
       <p style="margin-top:0" id="rv-count">${n} von ${c.positionen.length} Positionen geprüft.</p>
+      <p class="muted small">${papier} Papierbeleg${papier === 1 ? '' : 'e'} im Original erwartet${dig ? `; ${dig} Beleg${dig === 1 ? ' ist ein digitales' : 'e sind digitale'} Original${dig === 1 ? '' : 'e'} (liegen in der App, kein Papier)` : ''}.</p>
       <label class="fld"><span>Ablageort der Originalbelege (Ordner, Fach) – Pflichtfeld</span><input data-rv="ablageort" value="${esc(rv.ablageort || '')}" placeholder="z. B. Ordner Reisekosten 2026, Fach 3"></label>
-      <label class="check strong"><input type="checkbox" data-rv="originale"${all ? '' : ' disabled'}${all && rv.originale ? ' checked' : ''}> Alle Belege liegen im Original vor.</label>
+      <label class="check strong"><input type="checkbox" data-rv="originale"${all ? '' : ' disabled'}${all && rv.originale ? ' checked' : ''}> Alle Belege liegen im Original vor (Papierbelege im Büro, digitale Originale in der App).</label>
       ${all ? '' : '<p class="muted small">Das Häkchen lässt sich setzen, sobald jede Position als geprüft markiert ist (P-02).</p>'}
       <p class="muted small">Ist ein Betrag zu korrigieren, bitte mit Begründung zurückweisen; der Ersteller korrigiert und unterschreibt neu (P-06).</p>
       <div class="actions"><button class="btn danger-ghost" data-action="rv-reject">Zurückweisen</button><span class="grow"></span>
@@ -227,6 +229,13 @@ const Review = (() => {
       try { await reasonJob(t.value.trim()); $('#modal-root').innerHTML = ''; render(); }
       catch (e) { toast(e.message, 8000); go.disabled = false; go.textContent = 'Erneut versuchen'; }
     },
+    'proj-add': async el => {
+      const inp = $('#proj-in');
+      el.disabled = true;
+      try { await Data.addProject(inp.value); inp.value = ''; toast('Projekt hinzugefügt.'); await loadProjects(); }
+      catch (e) { toast(e.message, 8000); }
+      finally { el.disabled = false; }
+    },
     'role-add': async el => {
       const key = el.dataset.key, inp = $('#role-in-' + key);
       el.disabled = true;
@@ -248,17 +257,43 @@ const Review = (() => {
     besucher: { title: 'Mitarbeiter mit Zugang', group: 'Besucher der Website', text: 'Alle, die Reisekosten abrechnen. Wer eine der Rollen oben erhält, wird hier automatisch mit eingetragen.' }
   };
   function rolesView() {
-    if (!Data.cloud) return `<div class="page narrow"><div class="page-head"><h1>Rollen</h1></div><div class="card"><div class="card-body">Im lokalen Testbetrieb haben Sie alle Rollen. Die Rollenverwaltung steht mit Microsoft-365-Anbindung zur Verfügung.</div></div></div>`;
-    if (!R().admin) return `<div class="page narrow"><div class="page-head"><h1>Rollen</h1></div><div class="card"><div class="card-body">Nur Administratoren (Besitzer der SharePoint-Website) verwalten die Rollen.</div></div></div>`;
+    if (!R().admin) return `<div class="page narrow"><div class="page-head"><h1>Verwaltung</h1></div><div class="card"><div class="card-body">Nur Administratoren (Besitzer der SharePoint-Website) verwalten Rollen und Projekte.</div></div></div>`;
     return `<div class="page narrow">
-      <div class="page-head"><h1>Rollen</h1></div>
-      <p class="page-hint muted">Die Rollen sind Gruppen der SharePoint-Website „Reisekosten“. Die Flows prüfen bei jedem Auftrag, ob die Person in der passenden Gruppe ist. Vier-Augen-Prinzip: Wer prüft, sollte nicht zugleich freigeben.</p>
+      <div class="page-head"><h1>Verwaltung</h1></div>
+      <div class="card"><div class="card-head">Projekte und Kostenstellen</div><div class="card-body">
+        <p class="muted" style="margin-top:0">Auswahlliste für Reisen, Positionen und die Excel-Vorlage der Fahrten. Nicht mehr benötigte Projekte bitte deaktivieren statt löschen – bestehende Abrechnungen behalten ihren Projektnamen.</p>
+        <div id="proj-list">${projectsHTML()}</div>
+        <div class="row"><input class="role-in" id="proj-in" placeholder="Neues Projekt, z. B. 26-014 Uniper Besucherzentrum WHV">
+          <button class="btn primary small" data-action="proj-add">Hinzufügen</button></div></div></div>
+      ${Data.cloud ? `<h2 class="sec">Rollen</h2>
+      <p class="page-hint muted">Die Rollen sind Gruppen der SharePoint-Website „Reisekosten“. Der Flow prüft bei jedem Auftrag, ob die Person in der passenden Gruppe ist. Vier-Augen-Prinzip: Wer prüft, sollte nicht zugleich freigeben.</p>
       ${Object.keys(ROLES).map(k => `<div class="card"><div class="card-head">${esc(ROLES[k].title)} <span class="muted small">(${esc(ROLES[k].group)})</span></div>
         <div class="card-body"><p class="muted" style="margin-top:0">${esc(ROLES[k].text)}</p><div id="role-${k}">${membersHTML(k)}</div>
         <div class="row"><input class="role-in" id="role-in-${k}" type="email" placeholder="E-Mail-Adresse, z. B. k.johannsen@mh3-ingenieure.de">
           <button class="btn primary small" data-action="role-add" data-key="${k}">Hinzufügen</button></div></div></div>`).join('')}
-      ${overlapHTML()}
+      ${overlapHTML()}` : '<p class="muted">Im lokalen Testbetrieb haben Sie alle Rollen; die Rollenverwaltung steht mit Microsoft-365-Anbindung zur Verfügung.</p>'}
     </div>`;
+  }
+  let projData = { status: 'loading', list: [] };
+  function projectsHTML() {
+    if (projData.status === 'loading') return '<span class="muted">lädt …</span>';
+    if (projData.status === 'error') return `<span class="muted">Fehler: ${esc(projData.error)}</span>`;
+    if (!projData.list.length) return '<span class="muted">Noch keine Projekte eingetragen.</span>';
+    const list = [...projData.list].sort((a, b) => (b.aktiv - a.aktiv) || a.name.localeCompare(b.name, 'de'));
+    return `<ul class="members">${list.map(p => `<li${p.aktiv ? '' : ' class="off"'}><span><b>${esc(p.name)}</b>${p.aktiv ? '' : ' <span class="muted small">(deaktiviert)</span>'}</span>
+      <label class="check" style="margin:0"><input type="checkbox" data-proj="${esc(String(p.id))}"${p.aktiv ? ' checked' : ''}> aktiv</label></li>`).join('')}</ul>`;
+  }
+  async function loadProjects() {
+    try { projData = { status: 'ok', list: await Data.projects() }; }
+    catch (e) { projData = { status: 'error', list: [], error: e.message }; }
+    const box = $('#proj-list');
+    if (box) box.innerHTML = projectsHTML();
+  }
+  async function toggleProject(el) {
+    const p = projData.list.find(x => String(x.id) === el.dataset.proj);
+    if (!p) return;
+    try { await Data.setProject(p.id, el.checked); await loadProjects(); }
+    catch (e) { toast(e.message, 8000); el.checked = !el.checked; }
   }
   function membersHTML(k) {
     const d = roleData[k];
@@ -274,6 +309,7 @@ const Review = (() => {
     return both.length ? `<div class="banner bad">${ic('warn')}<div>In beiden Rollen: <b>${esc(both.map(x => x.name).join(', '))}</b>. Die App verhindert trotzdem, dass dieselbe Person eine Abrechnung prüft und freigibt.</div></div>` : '';
   }
   async function loadRoles(only) {
+    if (!only && R().admin) loadProjects();
     if (!Data.cloud || !R().admin) return;
     for (const k of only ? [only] : Object.keys(ROLES)) {
       roleData[k] = { status: 'loading', list: roleData[k]?.list || [] };
@@ -284,5 +320,5 @@ const Review = (() => {
     }
   }
 
-  return { listView, claimView, after, onInput, actions, rolesView, loadRoles };
+  return { listView, claimView, after, onInput, actions, rolesView, loadRoles, toggleProject };
 })();
