@@ -323,3 +323,5 @@ h2.sec { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; colo
 .calc-keys > button:not(.btn) { height: 44px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); font-size: 18px; }
 .calc-keys > button:not(.btn):active { background: var(--hover); }
 .calc-keys .btn { grid-column: span 1; height: 44px; justify-content: center; }
+/* Startseite: zwei Knöpfe (Auslage, Neue Reise) */
+.head-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }

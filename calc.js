@@ -13,6 +13,14 @@ const Calc = (() => {
   const teile = p => (isKm(p) ? [{ satz: 0, brutto: betrag(p) }] : p.ustSplit?.length ? p.ustSplit : [{ satz: Number(p.ust) || 0, brutto: betrag(p) }]);
   const ust = p => teile(p).reduce((a, t) => a + t.brutto - Math.round(t.brutto / (1 + t.satz / 100)), 0);
   const projektOf = (d, p) => String(p.projekt || d.kopf.kostenstelle || '').trim();
+  // Ä-30: Abrechnungsart – Dienstreise (Standard) oder Auslage ohne Reise (ohne Reiseziel, Beginn, Ende)
+  const isAuslage = d => d?.kopf?.art === 'auslage';
+  const ART_NAME = { reise: 'Dienstreise', auslage: 'Auslage ohne Reise' };
+  const artName = d => ART_NAME[isAuslage(d) ? 'auslage' : 'reise'];
+  function zeitraum(d) { // Belegzeitraum aus den Positionen (für Auslagen)
+    const ds = d.positionen.map(p => p.datum).filter(Boolean).sort();
+    return ds.length ? { von: ds[0], bis: ds[ds.length - 1] } : null;
+  }
 
   /* F-09: Summen. Firmenkarte zahlt die Firma direkt, sie wird nicht erstattet. */
   function sums(d) {
@@ -30,13 +38,16 @@ const Calc = (() => {
   function validate(d) {
     const k = d.kopf, out = [];
     const need = (v, key, msg) => { if (!String(v ?? '').trim()) out.push({ key, msg }); };
-    need(k.zweck, 'zweck', 'Reisezweck fehlt.');
+    const aus = isAuslage(d);
+    need(k.zweck, 'zweck', aus ? 'Zweck der Auslage fehlt.' : 'Reisezweck fehlt.');
     need(k.kostenstelle, 'kostenstelle', 'Projekt oder Kostenstelle fehlt.');
-    need(k.ort, 'ort', 'Reiseziel (Ort) fehlt.');
-    need(k.land, 'land', 'Reiseziel (Land) fehlt.');
-    need(k.beginn, 'beginn', 'Beginn der Reise (Datum und Uhrzeit) fehlt.');
-    need(k.ende, 'ende', 'Ende der Reise (Datum und Uhrzeit) fehlt.');
-    if (k.beginn && k.ende && k.ende <= k.beginn) out.push({ key: 'ende', msg: 'Das Ende der Reise muss nach dem Beginn liegen.' });
+    if (!aus) {
+      need(k.ort, 'ort', 'Reiseziel (Ort) fehlt.');
+      need(k.land, 'land', 'Reiseziel (Land) fehlt.');
+      need(k.beginn, 'beginn', 'Beginn der Reise (Datum und Uhrzeit) fehlt.');
+      need(k.ende, 'ende', 'Ende der Reise (Datum und Uhrzeit) fehlt.');
+      if (k.beginn && k.ende && k.ende <= k.beginn) out.push({ key: 'ende', msg: 'Das Ende der Reise muss nach dem Beginn liegen.' });
+    }
     if (!d.positionen.length) out.push({ key: 'positionen', msg: 'Es ist noch keine Kostenposition erfasst.' });
     d.positionen.forEach((p, i) => {
       const pre = `Position ${i + 1} (${KA(p.kostenart).name}): `, pk = 'p:' + p.id;
@@ -73,7 +84,9 @@ const Calc = (() => {
   function inhalt(d) {
     const k = d.kopf, t = s => String(s ?? '').trim();
     return {
-      kopf: { zweck: t(k.zweck), kostenstelle: t(k.kostenstelle), ort: t(k.ort), land: t(k.land), beginn: k.beginn, ende: k.ende, vorschuss: k.vorschuss || 0 },
+      // Auslage (seit 0.4.0): „art“ statt Reiseziel/Beginn/Ende; Dienstreisen unverändert (ältere Prüfsummen bleiben gültig)
+      kopf: isAuslage(d) ? { art: 'auslage', zweck: t(k.zweck), kostenstelle: t(k.kostenstelle), vorschuss: k.vorschuss || 0 }
+        : { zweck: t(k.zweck), kostenstelle: t(k.kostenstelle), ort: t(k.ort), land: t(k.land), beginn: k.beginn, ende: k.ende, vorschuss: k.vorschuss || 0 },
       positionen: d.positionen.map(p => ({
         datum: p.datum, kostenart: p.kostenart, brutto: betrag(p), ust: isKm(p) ? 0 : Number(p.ust), zahlungsart: isKm(p) ? 'privat' : p.zahlungsart,
         bemerkung: t(p.bemerkung), km: isKm(p) ? Number(p.km) : 0, kmSatz: isKm(p) ? p.kmSatz : 0, strecke: isKm(p) ? t(p.strecke) : '',
@@ -90,10 +103,11 @@ const Calc = (() => {
   function diff(alt, neu) {
     if (!alt) return '';
     const out = [], money = c => ((c || 0) / 100).toLocaleString('de-DE', { minimumFractionDigits: 2 }) + ' €';
-    const NAMES = { zweck: 'Reisezweck', kostenstelle: 'Kostenstelle', ort: 'Ort', land: 'Land', beginn: 'Beginn', ende: 'Ende', vorschuss: 'Vorschuss' };
+    const NAMES = { art: 'Art', zweck: 'Zweck', kostenstelle: 'Kostenstelle', ort: 'Ort', land: 'Land', beginn: 'Beginn', ende: 'Ende', vorschuss: 'Vorschuss' };
+    const show = (k, v) => (k === 'vorschuss' ? money(v) : k === 'art' ? ART_NAME[v || 'reise'] : v ?? '');
     for (const k of Object.keys(NAMES)) {
       const a = alt.kopf[k], b = neu.kopf[k];
-      if (stable(a) !== stable(b)) out.push(`${NAMES[k]}: „${k === 'vorschuss' ? money(a) : a ?? ''}“ → „${k === 'vorschuss' ? money(b) : b ?? ''}“`);
+      if (stable(a) !== stable(b)) out.push(`${NAMES[k]}: „${show(k, a)}“ → „${show(k, b)}“`);
     }
     const n = Math.max(alt.positionen.length, neu.positionen.length);
     for (let i = 0; i < n; i++) {
@@ -113,5 +127,5 @@ const Calc = (() => {
     return out.join('; ');
   }
 
-  return { KA, isKm, isBew, betrag, ust, teile, projektOf, sums, validate, stable, inhalt, pruefsumme, diff };
+  return { KA, isKm, isBew, betrag, ust, teile, projektOf, isAuslage, artName, zeitraum, sums, validate, stable, inhalt, pruefsumme, diff };
 })();

@@ -1,6 +1,12 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.3.3';
+const APP_VERSION = '0.4.0';
 const APP_CHANGES = [
+  {
+    v: '0.4.0', d: '02.10.2026', items: [
+      'Neu: „Auslage“ für einzelne Ausgaben ohne Dienstreise (z. B. Material, Porto) – nur Zweck und Projekt, ohne Reiseziel, Beginn und Ende; Prüfung und Freigabe wie bei Reisen',
+      'Art der Abrechnung (Dienstreise / Auslage ohne Reise) lässt sich im Entwurf umstellen'
+    ]
+  },
   {
     v: '0.3.3', d: '02.10.2026', items: [
       'Taschenrechner bei „Aufteilung nach Steuersatz“: Anteil zu 7 % und Trinkgeld zusammenrechnen; die auf dem Beleg erkannten Einzelpositionen lassen sich antippen',

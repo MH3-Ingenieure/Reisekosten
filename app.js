@@ -54,7 +54,13 @@ const fmtDT = s => (s ? fmtDate(s) + ' ' + s.slice(11, 16) : '');
 const fmtTs = ts => new Date(ts).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const fmtSize = b => (b >= 1048576 ? (b / 1048576).toLocaleString('de-DE', { maximumFractionDigits: 1 }) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
 
-const { KA, isKm, isBew, betrag, projektOf, sums, validate, inhalt, pruefsumme } = Calc; // Rechenregeln: calc.js
+const { KA, isKm, isBew, betrag, projektOf, isAuslage, artName, zeitraum, sums, validate, inhalt, pruefsumme } = Calc; // Rechenregeln: calc.js
+// Zeitraum zur Anzeige: Reise von Beginn bis Ende, Auslage aus den Belegdaten
+function whenText(d) {
+  const k = d.kopf;
+  if (isAuslage(d)) { const z = zeitraum(d); return z ? fmtDate(z.von) + (z.bis !== z.von ? ' – ' + fmtDate(z.bis) : '') : 'ohne Beleg'; }
+  return k.beginn ? fmtDate(k.beginn) + (k.ende && k.ende.slice(0, 10) !== k.beginn.slice(0, 10) ? ' – ' + fmtDate(k.ende) : '') : 'Datum offen';
+}
 const ZAHLUNG = { privat: 'privat', firmenkarte: 'Firmenkarte', bar: 'bar' };
 
 /* ---------- Symbole ---------- */
@@ -126,10 +132,10 @@ const localBanner = () => Data.cloud
 
 function tripCard(d, { who = false } = {}) {
   const k = d.kopf, s = sums(d), busy = Data.pendingFor(d).length;
-  const when = k.beginn ? fmtDate(k.beginn) + (k.ende && k.ende.slice(0, 10) !== k.beginn.slice(0, 10) ? ' – ' + fmtDate(k.ende) : '') : 'Datum offen';
-  const meta = [d.nr, who ? d.erstellerName : '', k.ort, when].filter(Boolean).join(' · ');
+  const aus = isAuslage(d);
+  const meta = [d.nr, who ? d.erstellerName : '', aus ? 'Auslage' : k.ort, whenText(d)].filter(Boolean).join(' · ');
   return `<a class="trip" href="#/reise/${esc(d.id)}">
-    <div class="trip-main"><div class="trip-title">${esc(k.zweck || 'Ohne Reisezweck')}</div>
+    <div class="trip-main"><div class="trip-title">${esc(k.zweck || (aus ? 'Auslage ohne Zweck' : 'Ohne Reisezweck'))}</div>
       <div class="muted">${esc(meta)} · ${d.positionen.length} Position${d.positionen.length === 1 ? '' : 'en'}</div></div>
     <div class="trip-side"><b>${money(s.auszahlung)}</b>${busy ? chip('Wird verarbeitet') : chip(Data.valid(d) ? d.status : 'Status ungültig')}</div></a>`;
 }
@@ -137,12 +143,13 @@ function homeView() {
   const drafts = Data.drafts(), claims = Data.claims(), card = d => tripCard(d);
   return `<div class="page">
     ${localBanner()}
-    <div class="page-head"><h1>Meine Reisekosten</h1><button class="btn primary" data-action="new">${ic('plus')} NEUE REISE</button></div>
+    <div class="page-head"><h1>Meine Reisekosten</h1><span class="head-btns"><button class="btn ghost" data-action="new-auslage" title="Einzelne Ausgabe ohne Dienstreise, z. B. Material, Porto, Parkschein vor Ort">${ic('plus')} AUSLAGE</button>
+      <button class="btn primary" data-action="new">${ic('plus')} NEUE REISE</button></span></div>
     <div class="home-tools"><button class="btn ghost small" data-action="import-pick">${ic('file')} Fahrten aus Excel übernehmen</button>
       <button class="link small" data-action="import-template">Excel-Vorlage für Fahrten herunterladen</button></div>
     ${drafts.length ? `<h2 class="sec">In Bearbeitung</h2><div class="trips">${drafts.map(d => card(d)).join('')}</div>` : ''}
     ${claims.length ? `<h2 class="sec">Eingereicht</h2><div class="trips">${claims.map(c => card(c)).join('')}</div>` : ''}
-    ${!drafts.length && !claims.length ? `<div class="empty"><p><b>Noch keine Reise erfasst.</b></p><p class="muted">Mit „Neue Reise“ anlegen, Kosten mit Beleg erfassen und zum Schluss unterschreiben und einreichen.</p></div>` : ''}
+    ${!drafts.length && !claims.length ? `<div class="empty"><p><b>Noch keine Reise erfasst.</b></p><p class="muted">Mit „Neue Reise“ anlegen, Kosten mit Beleg erfassen und zum Schluss unterschreiben und einreichen. Einzelne Ausgaben ohne Dienstreise (z. B. Material, Porto) über „Auslage“.</p></div>` : ''}
     <p class="foot"><a href="#/hilfe">${ic('help')} Hilfe</a></p>
   </div>`;
 }
@@ -156,16 +163,24 @@ function tripView(d) {
   const k = d.kopf, ro = !editable(d), errs = UI.errors?.id === d.id ? UI.errors.keys : new Set();
   const E = key => errs.has(key);
   const usedKs = [...new Set([...Data.master().kostenstellen, ...Data.drafts().map(x => x.kopf.kostenstelle), ...Data.claims().map(x => x.kopf.kostenstelle)].filter(Boolean))];
+  const aus = isAuslage(d), title = aus ? 'Auslage' : 'Reise';
+  const artSeg = `<div class="fld wide"><span>Art der Abrechnung</span><div class="seg">
+      <button type="button" class="${aus ? '' : 'on'}" data-action="set-art" data-art="reise">Dienstreise</button>
+      <button type="button" class="${aus ? 'on' : ''}" data-action="set-art" data-art="auslage">Auslage ohne Reise</button></div></div>`;
   const head = ro
-    ? `<div class="card"><div class="card-head">Reise</div><div class="card-body">${readHead(d)}</div></div>`
-    : `<div class="card"><div class="card-head">Reise</div><div class="card-body grid">
-      ${field('Reisezweck', 'zweck', k.zweck, { err: E('zweck'), ph: 'z. B. Baubesprechung Neubau Uniper', wide: true })}
+    ? `<div class="card"><div class="card-head">${title}</div><div class="card-body">${readHead(d)}</div></div>`
+    : `<div class="card"><div class="card-head">${title}</div><div class="card-body grid">
+      ${artSeg}
+      ${aus ? `${field('Wofür?', 'zweck', k.zweck, { err: E('zweck'), ph: 'z. B. Material für Baustelle Uniper', wide: true })}
+      ${field('Projekt / Kostenstelle', 'kostenstelle', k.kostenstelle, { err: E('kostenstelle'), list: 'dl-ks' })}
+      <p class="muted small wide" style="margin:0">Ohne Reiseziel, Beginn und Ende – Datum und Ort stehen bei den Belegen. Für Dienstreisen bitte „Dienstreise“ wählen.</p>`
+    : `${field('Reisezweck', 'zweck', k.zweck, { err: E('zweck'), ph: 'z. B. Baubesprechung Neubau Uniper', wide: true })}
       ${field('Projekt / Kostenstelle', 'kostenstelle', k.kostenstelle, { err: E('kostenstelle'), list: 'dl-ks' })}
       ${field('Reiseziel (Ort)', 'ort', k.ort, { err: E('ort') })}
       ${field('Land', 'land', k.land, { err: E('land'), list: 'dl-land' })}
       ${field('Beginn', 'beginn', k.beginn, { type: 'datetime-local', err: E('beginn') })}
       ${field('Ende', 'ende', k.ende, { type: 'datetime-local', err: E('ende') })}
-      ${field('Erhaltener Vorschuss (€)', 'vorschuss', moneyIn(k.vorschuss), { mode: 'decimal', ph: '0,00' })}
+      ${field('Erhaltener Vorschuss (€)', 'vorschuss', moneyIn(k.vorschuss), { mode: 'decimal', ph: '0,00' })}`}
       <datalist id="dl-ks">${usedKs.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
       <datalist id="dl-land">${['Deutschland', 'Österreich', 'Schweiz', 'Niederlande', 'Belgien', 'Luxemburg', 'Frankreich', 'Dänemark', 'Polen', 'Italien', 'Spanien', 'Vereinigtes Königreich'].map(x => `<option value="${x}">`).join('')}</datalist>
     </div></div>`;
@@ -175,7 +190,7 @@ function tripView(d) {
     + (d.status === 'Wird eingereicht' ? `<div class="banner wait">${ic('lock')}<div><b>Wird eingereicht.</b> Die Abrechnung ist unterschrieben und gesperrt. Die Übernahme dauert meist ein bis fünf Minuten; danach erscheint sie mit Abrechnungsnummer.</div></div>` : '');
   return `<div class="page narrow">
     <div class="page-head"><a class="back" href="#/">${ic('back')} Übersicht</a></div>
-    <div class="page-head"><h1 id="trip-title">${esc(k.zweck || 'Neue Reise')}</h1>${chip(d.status)}</div>
+    <div class="page-head"><h1 id="trip-title">${esc(k.zweck || (aus ? 'Neue Auslage' : 'Neue Reise'))}</h1>${chip(d.status)}</div>
     ${Data.cloud ? localBanner() : ''}${hint}
     ${UI.errors?.id === d.id ? `<div class="banner bad">${ic('warn')}<div>Vor dem Einreichen fehlen noch Angaben – die Felder sind rot markiert.</div></div>` : ''}
     ${head}
@@ -192,7 +207,9 @@ function tripView(d) {
 function readHead(d) {
   const k = d.kopf;
   const row = (l, v) => `<div class="rd"><span>${l}</span><b>${esc(v || '–')}</b></div>`;
-  return `<div class="rd-grid">${row('Reisezweck', k.zweck)}${row('Projekt / Kostenstelle', k.kostenstelle)}${row('Reiseziel', [k.ort, k.land].filter(Boolean).join(', '))}
+  if (isAuslage(d)) return `<div class="rd-grid">${row('Art', artName(d))}${row('Wofür', k.zweck)}${row('Projekt / Kostenstelle', k.kostenstelle)}
+    ${row('Belegdatum', whenText(d))}${k.vorschuss ? row('Vorschuss', money(k.vorschuss)) : ''}</div>`;
+  return `<div class="rd-grid">${row('Art', artName(d))}${row('Reisezweck', k.zweck)}${row('Projekt / Kostenstelle', k.kostenstelle)}${row('Reiseziel', [k.ort, k.land].filter(Boolean).join(', '))}
     ${row('Beginn', fmtDT(k.beginn))}${row('Ende', fmtDT(k.ende))}${row('Vorschuss', money(k.vorschuss))}</div>`;
 }
 function posRow(d, p, i, err, ro) {
@@ -261,6 +278,8 @@ function helpView() {
         <li>Baustellenfahrten eines Monats: Startseite → <b>Excel-Vorlage für Fahrten herunterladen</b>, im Laufe des Monats je Fahrt eine Zeile mit Projekt ausfüllen, am Monatsende <b>Fahrten aus Excel übernehmen</b>.</li>
         <li>Fahrten mit dem eigenen Pkw als <b>Privat-Pkw (Kilometer)</b> erfassen – der Betrag wird aus den Kilometern berechnet, ein Beleg ist nicht nötig.</li>
         <li>Zum Schluss <b>Unterschreiben und einreichen</b>. Die App prüft vorher, ob alle Pflichtangaben vorhanden sind.</li></ol>
+      <h3>Einzelne Ausgabe ohne Dienstreise</h3>
+      <p>Material, Porto, ein Parkschein vor Ort und Ähnliches: Startseite → <b>Auslage</b>. Es genügen „Wofür?“ und das Projekt; Reiseziel, Beginn und Ende entfallen, Datum und Ort stehen beim Beleg. Belege, Unterschrift, Prüfung und Freigabe laufen wie bei einer Reise.</p>
       <h3>Gut zu wissen</h3>
       <ul><li>Alles wird automatisch gespeichert. Sie können am Smartphone anfangen und am PC weitermachen.</li>
         <li>Belege: PDF, JPG, PNG oder HEIC, höchstens 10 MB. Große Fotos verkleinert die App selbst.</li>
@@ -497,7 +516,7 @@ async function runOcr(b, force) {
     if (f.ort) used.ort = f.ort;
     const wer = [f.aussteller, f.ort].filter(Boolean).join(', ');
     if (wer && (!p.bemerkung || force)) { p.bemerkung = wer; if (f.aussteller) used.aussteller = f.aussteller; }
-    if (f.ort && d && editable(d) && !String(d.kopf.ort || '').trim()) { d.kopf.ort = f.ort; Data.touch(d); } // Reiseziel noch leer
+    if (f.ort && d && editable(d) && !isAuslage(d) && !String(d.kopf.ort || '').trim()) { d.kopf.ort = f.ort; Data.touch(d); } // Reiseziel noch leer
     // Aufteilung nach Steuersätzen (z. B. Speisen 7 %, Getränke 19 %, Trinkgeld ohne USt)
     if (!s.touched.ust || force) {
       const teil = sz => f.split?.find(t => t.satz === sz)?.brutto || 0;
@@ -598,7 +617,7 @@ function openSign({ title, d, confirm, note = '', button, extra = '', run }) {
   $('#modal-root').innerHTML = `<div class="modal-back"><div class="modal" role="dialog" aria-label="${esc(title)}">
     <div class="modal-head"><h2>${esc(title)}</h2><button class="icon-btn" data-action="modal-close">${ic('x')}</button></div>
     <div class="modal-body">
-      <div class="sum-box"><div><b>${esc(d.nr ? d.nr + ' · ' : '')}${esc(d.kopf.zweck)}</b><br><span class="muted">${esc(d.erstellerName ? d.erstellerName + ' · ' : '')}${fmtDT(d.kopf.beginn)} – ${fmtDT(d.kopf.ende)} · ${d.positionen.length} Positionen</span></div>
+      <div class="sum-box"><div><b>${esc(d.nr ? d.nr + ' · ' : '')}${esc(d.kopf.zweck)}</b><br><span class="muted">${esc(d.erstellerName ? d.erstellerName + ' · ' : '')}${isAuslage(d) ? 'Auslage · ' + esc(whenText(d)) : `${fmtDT(d.kopf.beginn)} – ${fmtDT(d.kopf.ende)}`} · ${d.positionen.length} Positionen</span></div>
         <div class="sum-amt"><span class="muted small">${s.auszahlung < 0 ? 'Rückzahlung' : 'Auszahlung'}</span><b>${money(Math.abs(s.auszahlung))}</b></div></div>
       ${extra}
       ${stored ? `<div class="seg sig-mode"><button type="button" class="on" data-action="sig-mode" data-mode="stored">Hinterlegte Unterschrift</button><button type="button" data-action="sig-mode" data-mode="draw">Hier unterschreiben</button></div>` : ''}
@@ -658,6 +677,13 @@ const current = () => { const [r, id] = route(); return r === 'reise' ? Data.dra
 const ACTIONS = {
   nav: el => { location.hash = el.dataset.to; },
   new: () => { const d = Data.newDraft(); location.hash = '#/reise/' + d.id; },
+  'new-auslage': () => { const d = Data.newDraft(); d.kopf.art = 'auslage'; Data.touch(d); location.hash = '#/reise/' + d.id; },
+  'set-art': el => { // Dienstreise ↔ Auslage; Reiseangaben bleiben erhalten, zählen bei Auslagen aber nicht
+    const d = current(); if (!d || !editable(d)) return;
+    if (el.dataset.art === 'auslage') d.kopf.art = 'auslage'; else delete d.kopf.art;
+    if (UI.errors?.id === d.id) UI.errors = null;
+    Data.touch(d); render();
+  },
   sync: () => Data.cloud ? (Data.signedIn() ? Data.sync() : Data.login()) : null,
   login: () => Data.login(),
   logout: () => Data.logout(),
@@ -769,7 +795,7 @@ document.addEventListener('input', e => {
     const k = el.dataset.k;
     if (k === 'vorschuss') { const c = parseMoney(el.value); if (!Number.isNaN(c)) d.kopf.vorschuss = c; }
     else d.kopf[k] = el.value;
-    if (k === 'zweck') $('#trip-title').textContent = el.value || 'Neue Reise';
+    if (k === 'zweck') $('#trip-title').textContent = el.value || (isAuslage(d) ? 'Neue Auslage' : 'Neue Reise');
     el.closest('.fld')?.classList.remove('err');
     $('#sums').innerHTML = sumsHTML(d);
     clearTimeout(kopfTimer);

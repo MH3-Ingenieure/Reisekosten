@@ -63,7 +63,7 @@ const Review = (() => {
       <div class="page-head"><h1>${esc(c.kopf.zweck)}</h1>${chip(valid ? st : 'Status ungültig')}</div>
       <p class="muted">${esc(c.nr)} · ${esc(c.erstellerName)} · eingereicht am ${c.eingereicht ? fmtTs(c.eingereicht) : '–'}${c.freigabedatum ? ' · freigegeben am ' + fmtTs(c.freigabedatum) : ''}${c.auszahlungsdatum ? ' · ausgezahlt am ' + fmtDate(c.auszahlungsdatum) : ''}</p>
       ${banners}<div id="sum-warn"></div>
-      <div class="card"><div class="card-head">Reise</div><div class="card-body">${readHead(c)}</div></div>
+      <div class="card"><div class="card-head">${isAuslage(c) ? 'Auslage' : 'Reise'}</div><div class="card-body">${readHead(c)}</div></div>
       <div class="card"><div class="card-head">Kostenpositionen${can.check ? '<span class="grow"></span><span class="muted small">Jede Position prüfen und abhaken (B-09)</span>' : ''}</div><div class="pos-list">${rows}</div></div>
       <div class="card"><div class="card-head">Summen</div><div class="card-body">${sumsHTML(c)}</div></div>
       ${can.check ? checkPanel(c, rv) : ''}

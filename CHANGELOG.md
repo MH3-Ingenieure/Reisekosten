@@ -1,5 +1,13 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.4.0 – 02.10.2026 (Ä-30)
+
+- Abrechnungsart „Auslage ohne Reise“ (kopf.art = 'auslage'): Pflicht nur Zweck und Projekt; Reiseziel, Beginn, Ende entfallen; Anzeige mit Belegzeitraum aus den Positionen
+- Startseite: Knopf „Auslage“ neben „Neue Reise“; im Entwurf Umschalter Dienstreise / Auslage ohne Reise (Reiseangaben bleiben erhalten, zählen bei Auslagen nicht)
+- Prüfsumme: bei Auslagen Kopf { art, zweck, kostenstelle, vorschuss }; Dienstreisen unverändert, ältere Prüfsummen bleiben gültig
+- Prüfung/Freigabe zeigen die Art; Änderungsprotokoll (F-17) nennt einen Wechsel der Art
+- Hilfe ergänzt
+
 ## 0.3.3 – 02.10.2026
 
 - Taschenrechner (Knopf „Rechner“) für den Anteil zu 7 % und das Trinkgeld: Tastenfeld mit + − × ÷ und Klammern (auch auf dem iPhone, dessen Zahlentastatur kein „+“ hat), „Übernehmen“ trägt das Ergebnis ein
