@@ -1,5 +1,11 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.3.3 – 02.10.2026
+
+- Taschenrechner (Knopf „Rechner“) für den Anteil zu 7 % und das Trinkgeld: Tastenfeld mit + − × ÷ und Klammern (auch auf dem iPhone, dessen Zahlentastatur kein „+“ hat), „Übernehmen“ trägt das Ergebnis ein
+- Belegerkennung liefert die Einzelpositionen (Text und Betrag) bis zur Summen- bzw. Steuerzeile; im Rechner als antippbare Beträge
+- Betragsfelder werten Rechenausdrücke aus (parseMoney → calcMoney), z. B. „13,90+13,40+15,90+15,90“
+
 ## 0.3.2 – 02.10.2026
 
 - Belegerkennung, Fotos: Zeilen der Steuertabelle mit verrauschtem Anfang („A 8 7,0 55,23 3,87 59,10“) werden erkannt, wenn Netto + Steuer = Brutto aufgeht; „MuSt“ als Lesefehler für MwSt; getestet mit dem fotografierten ALEX-Beleg (59,10 € zu 7 %, 20,20 € zu 19 %, 5,70 € Trinkgeld)

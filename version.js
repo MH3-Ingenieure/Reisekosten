@@ -1,6 +1,12 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.3.2';
+const APP_VERSION = '0.3.3';
 const APP_CHANGES = [
+  {
+    v: '0.3.3', d: '02.10.2026', items: [
+      'Taschenrechner bei „Aufteilung nach Steuersatz“: Anteil zu 7 % und Trinkgeld zusammenrechnen; die auf dem Beleg erkannten Einzelpositionen lassen sich antippen',
+      'Betragsfelder rechnen selbst: z. B. „13,90+13,40+15,90“ eintippen'
+    ]
+  },
   {
     v: '0.3.2', d: '02.10.2026', items: [
       'Belegerkennung bei Fotos: Steuertabelle auch dann, wenn die Texterkennung sie verrauscht liest („A 8 7,0 55,23 3,87 59,10“); dadurch Aufteilung 7 % / 19 % / Trinkgeld auch beim fotografierten Bewirtungsbeleg',

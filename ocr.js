@@ -164,6 +164,17 @@ const Ocr = (() => {
     else if (rates.size) out.ust = [...rates][0];
     if (tip) out.trinkgeld = tip;
 
+    // Einzelpositionen (Text + Betrag am Zeilenende) bis zur Summen-/Steuerzeile – zum Antippen im Rechner
+    const items = [];
+    for (const l of lines) {
+      if (/netto|zwischensum|zuischensu|summe|total|gesamt|zu zahlen|endbetrag/i.test(l)) { if (items.length) break; continue; }
+      if (/tisch|beleg|rechnung|tel\b|tel\.|fax|datum|ust-?id|bon-?nr|trinkgeld/i.test(l)) continue;
+      if (/\(\s*\d*\s*[x×]|[x×]\s*\d+[,.]\d{2}\s*\)/i.test(l)) continue; // Mengenzeile „A (3x 3,80)“
+      const m = l.match(/^(.*?[A-Za-zÄÖÜäöüß]{3,}.*?)\s+(\d{1,4})[,.](\d{2})(?:\s*[A-C*])?\s*$/);
+      if (m) items.push({ text: m[1].replace(/^[^A-Za-zÄÖÜäöüß0-9]+/, '').slice(0, 40), brutto: toCent(m[2] + ',' + m[3]) });
+    }
+    if (items.length) out.items = items.slice(0, 40);
+
     // Aussteller: bevorzugt die Zeile mit Rechtsform, sonst erste aussagekräftige Zeile oben
     const AMT1 = new RegExp(AMT.source); // ohne „g“, sonst merkt sich test() die Position
     const top = lines.slice(0, 10).filter(l => /[a-zäöüß]{3,}/i.test(l) && !GENERIC.test(l) && !/\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/.test(l) && !AMT1.test(l) && !/www\.|\.de\b|\.com\b|@/i.test(l));

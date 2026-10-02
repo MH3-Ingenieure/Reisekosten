@@ -18,10 +18,27 @@ const SIG_KEY = 'reisekosten.unterschrift';
 function parseMoney(v) {
   let s = String(v ?? '').replace(/[€\s]/g, '');
   if (!s) return 0;
+  if (/[+*/×÷x:()]|.-/i.test(s)) return calcMoney(s); // Rechenausdruck, z. B. „13,90+13,40+15,90“
   if (s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
   else if ((s.match(/\./g) || []).length > 1) s = s.replace(/\./g, '');
   const n = Number(s);
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : NaN;
+}
+// Taschenrechner: + − × ÷ und Klammern; Ergebnis in Cent (NaN bei Fehler oder negativ)
+function calcMoney(expr) {
+  const toks = String(expr).replace(/\s/g, '').replace(/[×xX]/g, '*').replace(/[÷:]/g, '/').replace(/[−–]/g, '-').match(/\d[\d.,]*|[-+*/()]|./g) || [];
+  let i = 0;
+  const num = t => { const c = parseMoney(t); return Number.isNaN(c) ? NaN : c / 100; };
+  const atom = () => {
+    const t = toks[i++];
+    if (t === '(') { const v = sum(); if (toks[i++] !== ')') return NaN; return v; }
+    if (t === '-') return -atom();
+    return t && /^\d/.test(t) ? num(t) : NaN;
+  };
+  const prod = () => { let v = atom(); while (toks[i] === '*' || toks[i] === '/') { const o = toks[i++], w = atom(); v = o === '*' ? v * w : v / w; } return v; };
+  const sum = () => { let v = prod(); while (toks[i] === '+' || toks[i] === '-') { const o = toks[i++], w = prod(); v = o === '+' ? v + w : v - w; } return v; };
+  const v = sum();
+  return i === toks.length && Number.isFinite(v) && v >= 0 ? Math.round(v * 100) : NaN;
 }
 function parseNum(v) {
   const s = String(v ?? '').replace(/\s/g, '').replace(',', '.');
@@ -304,10 +321,35 @@ function ustText(p, raw) {
 function mixHTML(s, dis) {
   if (!s.mixed) return '';
   const m = mixParts(s);
+  const field = (f, label) => `<div class="fld"><span>${label}</span><div class="with-calc"><input data-p="${f}" value="${esc(s.raw[f])}" inputmode="decimal" placeholder="0,00"${dis}>
+    ${dis ? '' : `<button type="button" class="btn ghost small" data-action="calc-open" data-f="${f}" title="Taschenrechner">${CALC_IC} Rechner</button>`}</div></div>`;
   return `<div class="sub-card mix"><div class="sub-title">Aufteilung nach Steuersatz</div><div class="grid">
-    <label class="fld"><span>davon zu 7 % (z. B. Speisen, Übernachtung)</span><input data-p="s7" value="${esc(s.raw.s7)}" inputmode="decimal" placeholder="0,00"${dis}></label>
-    <label class="fld"><span>davon ohne Umsatzsteuer (Trinkgeld)</span><input data-p="s0" value="${esc(s.raw.s0)}" inputmode="decimal" placeholder="0,00"${dis}></label>
-    <div class="fld wide"><span>Rest zu 19 % (z. B. Getränke, Frühstück)</span><div class="calc" id="mix-19">${money(Math.max(0, m.a19))}</div></div></div></div>`;
+    ${field('s7', 'davon zu 7 % (z. B. Speisen, Übernachtung)')}
+    ${field('s0', 'davon ohne Umsatzsteuer (Trinkgeld)')}
+    <div class="fld wide"><span>Rest zu 19 % (z. B. Getränke, Frühstück)</span><div class="calc" id="mix-19">${money(Math.max(0, m.a19))}</div></div></div>
+    ${s.calc && !dis ? calcHTML(s) : ''}</div>`;
+}
+// Taschenrechner für die Anteile; erkannte Einzelpositionen vom Beleg lassen sich antippen
+const CALC_IC = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 12h2M14 12h2M8 16h2M14 16h2"/></svg>';
+const CALC_LABEL = { s7: 'Anteil zu 7 %', s0: 'Trinkgeld' };
+function calcHTML(s) {
+  const c = s.calc, r = calcMoney(c.expr || '0');
+  const keys = ['7', '8', '9', '÷', '4', '5', '6', '×', '1', '2', '3', '−', '0', ',', '⌫', '+', 'C', '(', ')'];
+  return `<div class="calc-box" role="group" aria-label="Rechner">
+    <div class="calc-head"><b>Rechner – ${CALC_LABEL[c.f]}</b><button type="button" class="icon-btn" data-action="calc-close" aria-label="Rechner schließen">${ic('x')}</button></div>
+    <input class="calc-expr" data-calc value="${esc(c.expr)}" inputmode="decimal" placeholder="z. B. 13,90+13,40" autocomplete="off">
+    <div class="calc-res" id="calc-res">= ${Number.isNaN(r) ? '…' : money(r)}</div>
+    ${s.ocrItems?.length ? `<div class="calc-items"><span>Positionen vom Beleg antippen:</span>${s.ocrItems.map((it, i) => `<button type="button" class="chip${c.used?.includes(i) ? ' on' : ''}" data-action="calc-item" data-i="${i}">${esc(it.text)} <b>${moneyIn(it.brutto)}</b></button>`).join('')}</div>` : ''}
+    <div class="calc-keys">${keys.map(k => `<button type="button" data-action="calc-key" data-k="${k}">${k}</button>`).join('')}
+      <button type="button" class="btn primary" data-action="calc-ok"${Number.isNaN(r) ? ' disabled' : ''}>Übernehmen</button></div>
+  </div>`;
+}
+function calcSet(expr) {
+  const s = UI.pos; s.calc.expr = expr;
+  const inp = $('.calc-expr'); if (inp && inp.value !== expr) inp.value = expr;
+  const r = calcMoney(expr || '0');
+  if ($('#calc-res')) $('#calc-res').textContent = '= ' + (Number.isNaN(r) ? '…' : money(r));
+  const ok = $('[data-action="calc-ok"]'); if (ok) ok.disabled = Number.isNaN(r);
 }
 function belegeHTML(p, ro, s) {
   return `<div class="belege">
@@ -337,7 +379,7 @@ function ocrHTML(s) {
   if (f.ort) parts.push(f.ort);
   return `<div class="ocr ok">${ic('check')}<div>${parts.length ? 'Aus dem Beleg übernommen: <b>' + esc(parts.join(' · ')) + '</b>. Bitte prüfen.' : 'Auf dem Beleg wurden keine Angaben erkannt – bitte von Hand eintragen.'}
     <button type="button" class="link" data-action="ocr-run">erneut lesen</button>
-    ${f.mixed ? '<br><b>Bitte ergänzen:</b> Der Beleg enthält 7 % und 19 % Umsatzsteuer. Unten bei „Aufteilung nach Steuersatz“ den Anteil zu 7 % (und ggf. das Trinkgeld) eintragen.' : ''}</div></div>`;
+    ${f.mixed ? '<br><b>Bitte ergänzen:</b> Der Beleg enthält 7 % und 19 % Umsatzsteuer. Unten bei „Aufteilung nach Steuersatz“ den Anteil zu 7 % (und ggf. das Trinkgeld) eintragen – mit „Rechner“ lassen sich die Positionen vom Beleg zusammenzählen.' : ''}</div></div>`;
 }
 function renderPos() {
   const s = UI.pos, p = s.p, ro = s.ro, ka = p.kostenart ? KA(p.kostenart) : null;
@@ -466,6 +508,7 @@ async function runOcr(b, force) {
     }
     if (isBew(p) && (!p.bewirtung.ort || p.bewirtung.ort === d?.kopf.ort || force)) p.bewirtung.ort = [f.aussteller, f.ort || d?.kopf.ort].filter(Boolean).join(', ');
     s.ocrBew = [f.aussteller, f.ort].filter(Boolean).join(', '); // falls Bewirtung erst danach gewählt wird
+    s.ocrItems = f.items || []; // Einzelpositionen für den Rechner
     s.ocr = { state: 'ok', found: used };
   } catch (e) {
     if (UI.pos === s) s.ocr = { state: 'err', msg: e.message };
@@ -635,6 +678,24 @@ const ACTIONS = {
   },
   'pos-ka-change': () => { UI.pos.pickKa = true; renderPos(); },
   'pos-pay': el => { UI.pos.p.zahlungsart = el.dataset.key; renderPos(); },
+  'calc-open': el => { const s = UI.pos, f = el.dataset.f; s.calc = { f, expr: String(s.raw[f] || '').trim(), used: [] }; renderPos(); setTimeout(() => $('.calc-box')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 30); },
+  'calc-close': () => { UI.pos.calc = null; renderPos(); },
+  'calc-key': el => {
+    const k = el.dataset.k, e = UI.pos.calc.expr || '';
+    const op = { '÷': '/', '×': '*', '−': '-' }[k] || k;
+    calcSet(k === 'C' ? '' : k === '⌫' ? e.slice(0, -1) : e + op);
+  },
+  'calc-item': el => {
+    const c = UI.pos.calc, i = Number(el.dataset.i), it = UI.pos.ocrItems[i], e = c.expr || '';
+    calcSet(e && !/[-+*/(]$/.test(e) ? `${e}+${moneyIn(it.brutto)}` : e + moneyIn(it.brutto));
+    if (!c.used.includes(i)) c.used.push(i);
+    el.classList.add('on');
+  },
+  'calc-ok': () => {
+    const s = UI.pos, c = s.calc, r = calcMoney(c.expr || '0');
+    if (Number.isNaN(r)) return;
+    s.raw[c.f] = moneyIn(r); s.calc = null; renderPos();
+  },
   'pos-save': savePos,
   'pos-cancel': () => { if (UI.pos && !UI.pos.ro) for (const id of UI.pos.added) Media.del(id).catch(() => {}); closePos(); },
   'pos-delete': () => {
@@ -696,6 +757,7 @@ document.addEventListener('click', e => {
 });
 document.addEventListener('input', e => {
   const el = e.target;
+  if (el.dataset.calc !== undefined && UI.pos?.calc) { const v = el.value; calcSet(v); return; }
   if (el.dataset.p !== undefined && UI.pos) return posInput(el);
   if ((el.dataset.rv !== undefined || el.dataset.rf !== undefined) && el.type !== 'checkbox' && el.tagName !== 'SELECT') { if (el.dataset.rv !== 'datum') Review.onInput(el); return; }
   if (el.dataset.actionInput === 'ocr-toggle') { Ocr.setEnabled(el.checked); toast(el.checked ? 'Belegerkennung eingeschaltet.' : 'Belegerkennung ausgeschaltet.'); return; }
