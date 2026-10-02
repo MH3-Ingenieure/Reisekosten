@@ -1,5 +1,11 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.3.2 – 02.10.2026
+
+- Belegerkennung, Fotos: Zeilen der Steuertabelle mit verrauschtem Anfang („A 8 7,0 55,23 3,87 59,10“) werden erkannt, wenn Netto + Steuer = Brutto aufgeht; „MuSt“ als Lesefehler für MwSt; getestet mit dem fotografierten ALEX-Beleg (59,10 € zu 7 %, 20,20 € zu 19 %, 5,70 € Trinkgeld)
+- Datum auch mit Leerzeichen nach dem Punkt („30.09. 2026“)
+- Aussteller ohne vorangestellte Bruchstücke vom Bildrand
+
 ## 0.3.1 – 02.10.2026
 
 - Belegerkennung, Steuersatz: zusätzlich ohne %-Zeichen hinter MwSt/USt/Steuersatz und aus Steuerbetrag ÷ (Brutto − Steuer) zurückgerechnet

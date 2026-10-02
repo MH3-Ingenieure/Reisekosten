@@ -85,7 +85,7 @@ const Ocr = (() => {
     const today = new Date(), min = new Date(today.getFullYear() - 3, 0, 1);
     const MON = { jan: 1, feb: 2, mär: 3, mar: 3, mrz: 3, apr: 4, mai: 5, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, dez: 12, dec: 12 };
     const dates = [];
-    for (const m of text.matchAll(/(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4}|\d{2})(?!\d)|(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[.\- ]?([A-Za-zÄä]{3})[a-zä]*[.\- ]?(\d{4}|\d{2})(?!\d)/g)) {
+    for (const m of text.matchAll(/(?<!\d)(\d{1,2})[.\-/]\s?(\d{1,2})(?:[.\-/]\s?|\s)(\d{4}|\d{2})(?!\d)|(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[.\- ]?([A-Za-zÄä]{3})[a-zä]*[.\- ]?(\d{4}|\d{2})(?!\d)/g)) {
       let y, mo, d;
       if (m[4]) [y, mo, d] = [Number(m[4]), Number(m[5]), Number(m[6])];
       else if (m[8]) { mo = MON[m[8].toLowerCase()]; if (!mo) continue; d = Number(m[7]); y = m[9].length === 2 ? 2000 + Number(m[9]) : Number(m[9]); }
@@ -115,14 +115,16 @@ const Ocr = (() => {
     const tip = tipLine ? Math.max(0, ...amounts(tipLine)) : 0;
 
     // Umsatzsteuer je Satz: aus Steuertabellen („A= 19.0  16,97  3,23  20,20“) und Zeilen mit „7 %“, „MwSt 19“
-    const RATE = /(?:(?<![\d,.])(19|7)(?:[,.]0{1,2})?\s?(?:%|°\/o|0\/0)|(?:mwst|mw\.?-?st|ust|mehrwertsteuer|umsatzsteuer|steuersatz|vat)[^\d\n]{0,12}(19|7)(?![\d,.]\d)|^\s*[A-F]\s*[=:]\s*(19|7)(?:[,.]0{1,2})?(?!\d))/gi;
+    // 4. Fall: Tabellenzeile mit verrauschtem Anfang („A 8 7,0 55,23 3,87 59,10“) – zählt nur, wenn die Beträge aufgehen
+    const RATE = /(?:(?<![\d,.])(19|7)(?:[,.]0{1,2})?\s?(?:%|°\/o|0\/0)|(?:mwst|mw\.?-?st|mu\.?-?st|ust|mehrwertsteuer|umsatzsteuer|steuersatz|vat)[^\d\n]{0,12}(19|7)(?![\d,.]\d)|^\s*[A-F]\s*[=:]\s*(19|7)(?:[,.]0{1,2})?(?!\d)|(?<![\d,.])(19|7)[,.]0{1,2}(?=\s+\d{1,5}[,.]\d{2}\s+\d))/gi;
     const rates = new Set(), parts = { 7: new Set(), 19: new Set() };
     const near = (x, y) => Math.abs(x - y) <= 2; // Rundung auf Kassenbons
     for (const l of lines) {
       const hits = [...l.matchAll(RATE)];
       hits.forEach((h, k) => {
-        const r = Number(h[1] || h[2] || h[3]);
-        rates.add(r);
+        const r = Number(h[1] || h[2] || h[3] || h[4]);
+        const sure = !h[4];
+        if (sure) rates.add(r);
         // Beträge zwischen dieser und der nächsten Satzangabe gehören zu diesem Satz
         const seg = l.slice(h.index + h[0].length, k + 1 < hits.length ? hits[k + 1].index : undefined);
         const a = amounts(seg);
@@ -133,8 +135,8 @@ const Ocr = (() => {
           if (near(t, Math.round(x * r / 100))) g = a.find(y => near(y, x + t)) ?? x + t;   // x ist netto: Brutto aus der Zeile oder berechnet
           else if (near(t, x - Math.round(x * 100 / (100 + r)))) g = x;                    // x ist brutto („7 % auf 109,00 = 7,13“)
         }
-        if (g != null) parts[r].add(g);
-        else if (a.length === 1) { parts[r].add(a[0]); parts[r].add(Math.round(a[0] * (100 + r) / 100)); parts[r].add(Math.round(a[0] * (100 + r) / r)); } // Brutto, Netto oder Steuer
+        if (g != null) { parts[r].add(g); rates.add(r); }
+        else if (sure && a.length === 1) { parts[r].add(a[0]); parts[r].add(Math.round(a[0] * (100 + r) / 100)); parts[r].add(Math.round(a[0] * (100 + r) / r)); } // Brutto, Netto oder Steuer
       });
     }
     // ohne Satzangabe: aus dem Steuerbetrag zurückrechnen (Steuer / (Brutto − Steuer) ≈ 0,19 bzw. 0,07)
@@ -165,7 +167,8 @@ const Ocr = (() => {
     // Aussteller: bevorzugt die Zeile mit Rechtsform, sonst erste aussagekräftige Zeile oben
     const AMT1 = new RegExp(AMT.source); // ohne „g“, sonst merkt sich test() die Position
     const top = lines.slice(0, 10).filter(l => /[a-zäöüß]{3,}/i.test(l) && !GENERIC.test(l) && !/\d{1,2}[.\-/]\d{1,2}[.\-/]\d{2,4}/.test(l) && !AMT1.test(l) && !/www\.|\.de\b|\.com\b|@/i.test(l));
-    out.aussteller = (top.find(l => /\b(gmbh|ag|kg|ohg|gbr|ug|e\.\s?k\.?|e\.v\.)\b/i.test(l)) || top[0])?.slice(0, 60);
+    // Fotos: Texterkennung setzt oft Bruchstücke vom Rand davor („is ALEX Gaststätten“)
+    out.aussteller = (top.find(l => /\b(gmbh|ag|kg|ohg|gbr|ug|e\.\s?k\.?|e\.v\.)\b/i.test(l)) || top[0])?.replace(/^(?:[^\sA-ZÄÖÜ]\S?\s+|\S\s+)+(?=[A-ZÄÖÜ]{2})/, '').slice(0, 60);
     // Ort: Postleitzahl und Ort aus der Anschrift des Ausstellers (oben auf dem Beleg, nicht die Rechnungsanschrift)
     const PLZ = /(?<!\d)(?:D-?\s?)?(\d{5})\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.\- ]{1,40}?)(?=\s{2,}|,|\s+(?:tel|fon|telefon|fax|www|e-?mail|ust|steuer)\b|\s*$)/i;
     for (const l of lines.slice(0, 10)) {

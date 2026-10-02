@@ -1,6 +1,6 @@
 // Service Worker: Offline-Betrieb. Eigene Dateien: Netzwerk zuerst (Updates kommen sofort an), Cache als Fallback.
 // Anmeldebibliothek vom CDN: Cache zuerst (versionierte, unveränderliche Datei).
-const CACHE = 'reisekosten-0.3.1'; // mit APP_VERSION in version.js mitziehen
+const CACHE = 'reisekosten-0.3.2'; // mit APP_VERSION in version.js mitziehen
 const MSAL_URL = 'https://cdn.jsdelivr.net/npm/@azure/msal-browser@3.30.0/lib/msal-browser.min.js';
 const ASSETS = ['./', './index.html', './styles.css', './version.js', './media.js', './calc.js', './xlsx.js', './ocr.js', './data.js', './teams.js', './review.js', './import.js', './app.js', './config.js', './manifest.webmanifest',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png',

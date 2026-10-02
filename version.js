@@ -1,6 +1,12 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.3.1';
+const APP_VERSION = '0.3.2';
 const APP_CHANGES = [
+  {
+    v: '0.3.2', d: '02.10.2026', items: [
+      'Belegerkennung bei Fotos: Steuertabelle auch dann, wenn die Texterkennung sie verrauscht liest („A 8 7,0 55,23 3,87 59,10“); dadurch Aufteilung 7 % / 19 % / Trinkgeld auch beim fotografierten Bewirtungsbeleg',
+      'Belegerkennung: Datum auch mit Leerzeichen („30.09. 2026“), Aussteller ohne Bruchstücke vom Bildrand'
+    ]
+  },
   {
     v: '0.3.1', d: '02.10.2026', items: [
       'Belegerkennung übernimmt den Steuersatz zuverlässiger: auch ohne %-Zeichen („MwSt A 19“) und aus dem ausgewiesenen Steuerbetrag zurückgerechnet',
