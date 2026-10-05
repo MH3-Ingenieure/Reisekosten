@@ -347,7 +347,7 @@ const Data = (() => {
   }
   async function logout() {
     const open = S.drafts.filter(d => d.dirty).length;
-    if (!confirm(open ? `Abmelden? ${open} Entwurf/Entwürfe sind noch nicht übertragen und gehen dabei verloren.` : 'Abmelden?')) return;
+    if (!await ask(open ? `Abmelden? ${open} Entwurf/Entwürfe sind noch nicht übertragen und gehen dabei verloren.` : 'Abmelden?', 'Abmelden', !!open)) return;
     const a = account;
     S = fresh(); persist();
     if (teamsMode) { await pca.clearCache?.(); location.reload(); return; }

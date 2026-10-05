@@ -325,3 +325,9 @@ h2.sec { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; colo
 .calc-keys .btn { grid-column: span 1; height: 44px; justify-content: center; }
 /* Startseite: zwei Knöpfe (Auslage, Neue Reise) */
 .head-btns { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+/* Rückfrage (ersetzt confirm(), das Teams blockiert) */
+.ask-back { z-index: 70; align-items: center; padding: 16px; }
+.modal.ask { max-width: 420px; border-radius: 8px; }
+.modal.ask .modal-body p { margin: 4px 0; font-size: 15px; line-height: 1.45; }
+.btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.page-head .btn.small .spinner { width: 14px; height: 14px; }.page-head .back + .btn { margin-left: auto; }

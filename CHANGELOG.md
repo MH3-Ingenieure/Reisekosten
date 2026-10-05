@@ -1,5 +1,11 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.4.1 – 05.10.2026
+
+- PDF je Abrechnung in jedem Status (E-01/E-02, neues Modul pdf.js mit jsPDF 2.5.1 und jspdf-autotable 3.8.2 vom CDN): Kopf, Positionen, Bewirtungs- und Eigenbelegangaben, Summen, Status, Signaturen mit Bild, Prüfsumme; Belegfotos als eigene Seiten, PDF-Belege aufgeführt; Entwürfe mit Hinweis „ENTWURF“
+- Rückfragen über eigenen Dialog ask() statt confirm(): Teams blockiert confirm() – „Entwurf löschen“, „Position löschen“, Unterschrift entfernen, Rolle entfernen, Abmelden
+- Kopf der Reise neu angeordnet: Projekt | Vorschuss, Ort | Land, Beginn | Ende
+
 ## 0.4.0 – 02.10.2026 (Ä-30)
 
 - Abrechnungsart „Auslage ohne Reise“ (kopf.art = 'auslage'): Pflicht nur Zweck und Projekt; Reiseziel, Beginn, Ende entfallen; Anzeige mit Belegzeitraum aus den Positionen

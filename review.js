@@ -59,7 +59,7 @@ const Review = (() => {
     ].join('');
     const rows = c.positionen.map((p, i) => (can.check ? reviewRow(c, p, i, rv) : posRow(c, p, i, false, true))).join('');
     return `<div class="page narrow">
-      <div class="page-head"><a class="back" href="${back}">${ic('back')} Zurück</a></div>
+      <div class="page-head"><a class="back" href="${back}">${ic('back')} Zurück</a>${pdfBtn(c)}</div>
       <div class="page-head"><h1>${esc(c.kopf.zweck)}</h1>${chip(valid ? st : 'Status ungültig')}</div>
       <p class="muted">${esc(c.nr)} · ${esc(c.erstellerName)} · eingereicht am ${c.eingereicht ? fmtTs(c.eingereicht) : '–'}${c.freigabedatum ? ' · freigegeben am ' + fmtTs(c.freigabedatum) : ''}${c.auszahlungsdatum ? ' · ausgezahlt am ' + fmtDate(c.auszahlungsdatum) : ''}</p>
       ${banners}<div id="sum-warn"></div>
@@ -245,7 +245,7 @@ const Review = (() => {
     },
     'role-del': async el => {
       const key = el.dataset.key, u = (roleData[key]?.list || []).find(x => String(x.id) === el.dataset.id);
-      if (!u || !confirm(`${u.name} aus „${ROLES[key].title}“ entfernen?`)) return;
+      if (!u || !await ask(`${u.name} aus „${ROLES[key].title}“ entfernen?`, 'Entfernen', true)) return;
       try { await Data.removeMember(key, u.id); await loadRoles(key); } catch (e) { toast(e.message, 8000); }
     }
   };

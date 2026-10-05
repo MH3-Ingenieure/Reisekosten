@@ -176,11 +176,11 @@ function tripView(d) {
       <p class="muted small wide" style="margin:0">Ohne Reiseziel, Beginn und Ende – Datum und Ort stehen bei den Belegen. Für Dienstreisen bitte „Dienstreise“ wählen.</p>`
     : `${field('Reisezweck', 'zweck', k.zweck, { err: E('zweck'), ph: 'z. B. Baubesprechung Neubau Uniper', wide: true })}
       ${field('Projekt / Kostenstelle', 'kostenstelle', k.kostenstelle, { err: E('kostenstelle'), list: 'dl-ks' })}
+      ${field('Erhaltener Vorschuss (€)', 'vorschuss', moneyIn(k.vorschuss), { mode: 'decimal', ph: '0,00' })}
       ${field('Reiseziel (Ort)', 'ort', k.ort, { err: E('ort') })}
       ${field('Land', 'land', k.land, { err: E('land'), list: 'dl-land' })}
       ${field('Beginn', 'beginn', k.beginn, { type: 'datetime-local', err: E('beginn') })}
-      ${field('Ende', 'ende', k.ende, { type: 'datetime-local', err: E('ende') })}
-      ${field('Erhaltener Vorschuss (€)', 'vorschuss', moneyIn(k.vorschuss), { mode: 'decimal', ph: '0,00' })}`}
+      ${field('Ende', 'ende', k.ende, { type: 'datetime-local', err: E('ende') })}`}
       <datalist id="dl-ks">${usedKs.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
       <datalist id="dl-land">${['Deutschland', 'Österreich', 'Schweiz', 'Niederlande', 'Belgien', 'Luxemburg', 'Frankreich', 'Dänemark', 'Polen', 'Italien', 'Spanien', 'Vereinigtes Königreich'].map(x => `<option value="${x}">`).join('')}</datalist>
     </div></div>`;
@@ -189,7 +189,7 @@ function tripView(d) {
     + (d.status === 'Zurückgewiesen' && d.rueckweisung ? `<div class="banner bad">${ic('warn')}<div><b>Zurückgewiesen${d.nr ? ' (' + esc(d.nr) + ')' : ''}:</b> ${esc(d.rueckweisung)}<br><span class="small">Bitte korrigieren und erneut unterschreiben und einreichen. Hinweise der Prüfung stehen bei den Positionen.</span></div></div>` : '')
     + (d.status === 'Wird eingereicht' ? `<div class="banner wait">${ic('lock')}<div><b>Wird eingereicht.</b> Die Abrechnung ist unterschrieben und gesperrt. Die Übernahme dauert meist ein bis fünf Minuten; danach erscheint sie mit Abrechnungsnummer.</div></div>` : '');
   return `<div class="page narrow">
-    <div class="page-head"><a class="back" href="#/">${ic('back')} Übersicht</a></div>
+    <div class="page-head"><a class="back" href="#/">${ic('back')} Übersicht</a>${pdfBtn(d)}</div>
     <div class="page-head"><h1 id="trip-title">${esc(k.zweck || (aus ? 'Neue Auslage' : 'Neue Reise'))}</h1>${chip(d.status)}</div>
     ${Data.cloud ? localBanner() : ''}${hint}
     ${UI.errors?.id === d.id ? `<div class="banner bad">${ic('warn')}<div>Vor dem Einreichen fehlen noch Angaben – die Felder sind rot markiert.</div></div>` : ''}
@@ -204,6 +204,8 @@ function tripView(d) {
       <button class="btn primary big" data-action="submit">${ic('pen')} UNTERSCHREIBEN UND EINREICHEN</button></div>`}
   </div>`;
 }
+// PDF der Abrechnung in jedem Status (E-01/E-02)
+const pdfBtn = d => `<button class="btn ghost small" data-action="pdf" data-id="${esc(d.id)}" title="Abrechnung mit Belegen als PDF speichern">${ic('file')} PDF</button>`;
 function readHead(d) {
   const k = d.kopf;
   const row = (l, v) => `<div class="rd"><span>${l}</span><b>${esc(v || '–')}</b></div>`;
@@ -677,6 +679,14 @@ const current = () => { const [r, id] = route(); return r === 'reise' ? Data.dra
 const ACTIONS = {
   nav: el => { location.hash = el.dataset.to; },
   new: () => { const d = Data.newDraft(); location.hash = '#/reise/' + d.id; },
+  pdf: async el => {
+    const d = Data.draft(el.dataset.id) || Data.claim(el.dataset.id);
+    if (!d || el.disabled) return;
+    el.disabled = true; const old = el.innerHTML; el.innerHTML = '<span class="spinner"></span> PDF wird erstellt …';
+    try { toast('Gespeichert: ' + await Pdf.save(d), 5000); }
+    catch (e) { toast('PDF konnte nicht erstellt werden: ' + e.message, 8000); }
+    finally { el.disabled = false; el.innerHTML = old; }
+  },
   'new-auslage': () => { const d = Data.newDraft(); d.kopf.art = 'auslage'; Data.touch(d); location.hash = '#/reise/' + d.id; },
   'set-art': el => { // Dienstreise ↔ Auslage; Reiseangaben bleiben erhalten, zählen bei Auslagen aber nicht
     const d = current(); if (!d || !editable(d)) return;
@@ -724,9 +734,9 @@ const ACTIONS = {
   },
   'pos-save': savePos,
   'pos-cancel': () => { if (UI.pos && !UI.pos.ro) for (const id of UI.pos.added) Media.del(id).catch(() => {}); closePos(); },
-  'pos-delete': () => {
+  'pos-delete': async () => {
     const s = UI.pos, d = Data.draft(s.draftId);
-    if (!confirm('Diese Position löschen?')) return;
+    if (!await ask('Diese Position löschen?', 'Löschen', true) || UI.pos !== s) return;
     const orig = d.positionen.find(p => p.id === s.p.id);
     d.positionen = d.positionen.filter(p => p.id !== s.p.id);
     dropFiles(d, [...(orig?.belege || []), ...s.p.belege.filter(b => s.added.includes(b.id))]);
@@ -743,7 +753,7 @@ const ACTIONS = {
   },
   'bel-open': el => { const s = UI.pos; preview(s.p.belege.find(b => b.id === el.dataset.id), Data.draft(s.draftId) || Data.claim(s.draftId)); },
   'preview-close': closePreview,
-  'del-draft': async () => { const d = current(); if (d && confirm('Diesen Entwurf mit allen Positionen und Belegen löschen?')) { await Data.removeDraft(d); location.hash = '#/'; } },
+  'del-draft': async () => { const d = current(); if (d && await ask('Diesen Entwurf mit allen Positionen und Belegen löschen?', 'Löschen', true)) { await Data.removeDraft(d); location.hash = '#/'; toast('Entwurf gelöscht.'); } },
   submit: () => { const d = current(); if (editable(d)) startSubmit(d); },
   'modal-close': () => { $('#modal-root').innerHTML = ''; if (UI.pendingRender) render(); },
   'goto-err': el => {
@@ -771,7 +781,7 @@ const ACTIONS = {
   },
   'sig-upload': () => $('#pick-signature').click(),
   'teams-package': () => Teams.download(),
-  'sig-del': () => { if (confirm('Hinterlegte Unterschrift entfernen?')) { localStorage.removeItem(SIG_KEY); render(); } }
+  'sig-del': async () => { if (await ask('Hinterlegte Unterschrift entfernen?', 'Entfernen', true)) { localStorage.removeItem(SIG_KEY); render(); } }
 };
 Object.assign(ACTIONS, Review.actions, Import.actions); // Prüfung, Freigabe, Verwaltung (review.js), Fahrtenimport (import.js)
 
@@ -832,6 +842,22 @@ function toast(msg, ms = 3500) {
   const t = $('#toast');
   t.textContent = msg; t.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+// Eigene Rückfrage statt confirm(): Teams blockiert confirm() in der eingebetteten App (liefert sofort „Abbrechen“)
+function ask(msg, okLabel = 'OK', danger = false) {
+  return new Promise(done => {
+    const w = document.createElement('div');
+    w.className = 'modal-back ask-back';
+    w.innerHTML = `<div class="modal ask" role="alertdialog" aria-modal="true"><div class="modal-body"><p>${esc(msg)}</p></div>
+      <div class="modal-foot"><span class="grow"></span><button class="btn ghost" data-ask="0">Abbrechen</button>
+      <button class="btn ${danger ? 'danger' : 'primary'}" data-ask="1">${esc(okLabel)}</button></div></div>`;
+    const end = v => { w.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); end(false); } };
+    w.addEventListener('click', e => { e.stopPropagation(); const b = e.target.closest('[data-ask]'); if (b) end(b.dataset.ask === '1'); else if (e.target === w) end(false); });
+    document.addEventListener('keydown', key, true);
+    document.body.appendChild(w);
+    w.querySelector('[data-ask="1"]').focus();
+  });
 }
 function showLogin(teams, url) {
   if ($('#login-screen')) return;

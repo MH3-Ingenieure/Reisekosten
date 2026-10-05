@@ -1,6 +1,13 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.4.0';
+const APP_VERSION = '0.4.1';
 const APP_CHANGES = [
+  {
+    v: '0.4.1', d: '05.10.2026', items: [
+      'PDF der Abrechnung in jedem Status (Knopf „PDF“ oben rechts): Angaben, Positionen, Bewirtung, Summen, Unterschriften, Prüfsumme und die Belegfotos',
+      '„Entwurf löschen“ und „Position löschen“ funktionieren jetzt auch in Teams (eigene Rückfrage statt Browser-Dialog)',
+      'Neue Reise: Beginn und Ende nebeneinander, Ort und Land darüber, Vorschuss neben dem Projekt'
+    ]
+  },
   {
     v: '0.4.0', d: '02.10.2026', items: [
       'Neu: „Auslage“ für einzelne Ausgaben ohne Dienstreise (z. B. Material, Porto) – nur Zweck und Projekt, ohne Reiseziel, Beginn und Ende; Prüfung und Freigabe wie bei Reisen',
