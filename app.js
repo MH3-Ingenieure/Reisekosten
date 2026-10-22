@@ -159,6 +159,20 @@ function field(label, key, value, { type = 'text', err, list, ph = '', mode, wid
     <input type="${type}" data-k="${key}" value="${esc(value)}" placeholder="${esc(ph)}"${list ? ` list="${list}"` : ''}${mode ? ` inputmode="${mode}"` : ''} autocomplete="off"></label>`;
 }
 
+// Datum + Uhrzeit: volle Stunden und Minuten in 5-Minuten-Schritten (Wert „JJJJ-MM-TTTHH:MM“)
+function dtField(label, key, value, err) {
+  const m = String(value || '').match(/^(\d{4}-\d{2}-\d{2})(?:T(\d{2})?:?(\d{2})?)?/) || [];
+  const [, d = '', h = '', mi = ''] = m;
+  const mins = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
+  if (mi && !mins.includes(mi)) mins.push(mi); // ältere Eingabe mit krummer Minute bleibt sichtbar
+  const opt = (v, cur) => `<option value="${v}"${v === cur ? ' selected' : ''}>${v || '--'}</option>`;
+  return `<div class="fld${err ? ' err' : ''}"><span>${label}</span><div class="dt-row">
+    <input type="date" data-dt="${key}" data-part="d" value="${esc(d)}" aria-label="${label}: Datum">
+    <select data-dt="${key}" data-part="h" aria-label="${label}: Stunde">${['', ...Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))].map(v => opt(v, h)).join('')}</select>
+    <span class="dt-sep">:</span>
+    <select data-dt="${key}" data-part="m" aria-label="${label}: Minute">${mins.sort().map(v => opt(v, mi || '00')).join('')}</select>
+    <span class="dt-uhr">Uhr</span></div></div>`;
+}
 function tripView(d) {
   const k = d.kopf, ro = !editable(d), errs = UI.errors?.id === d.id ? UI.errors.keys : new Set();
   const E = key => errs.has(key);
@@ -179,8 +193,8 @@ function tripView(d) {
       ${field('Erhaltener Vorschuss (€)', 'vorschuss', moneyIn(k.vorschuss), { mode: 'decimal', ph: '0,00' })}
       ${field('Reiseziel (Ort)', 'ort', k.ort, { err: E('ort') })}
       ${field('Land', 'land', k.land, { err: E('land'), list: 'dl-land' })}
-      ${field('Beginn', 'beginn', k.beginn, { type: 'datetime-local', err: E('beginn') })}
-      ${field('Ende', 'ende', k.ende, { type: 'datetime-local', err: E('ende') })}`}
+      ${dtField('Beginn', 'beginn', k.beginn, E('beginn'))}
+      ${dtField('Ende', 'ende', k.ende, E('ende'))}`}
       <datalist id="dl-ks">${usedKs.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
       <datalist id="dl-land">${['Deutschland', 'Österreich', 'Schweiz', 'Niederlande', 'Belgien', 'Luxemburg', 'Frankreich', 'Dänemark', 'Polen', 'Italien', 'Spanien', 'Vereinigtes Königreich'].map(x => `<option value="${x}">`).join('')}</datalist>
     </div></div>`;
@@ -196,7 +210,7 @@ function tripView(d) {
     ${head}
     <div class="card${E('positionen') ? ' err-card' : ''}"><div class="card-head">Kostenpositionen<span class="grow"></span>
       ${ro ? '' : `<button class="btn primary small" data-action="add-pos">${ic('plus')} Position</button>`}</div>
-      <div class="pos-list">${rows || `<p class="muted pad">Noch keine Position. ${ro ? '' : 'Mit „+ Position“ Kosten erfassen.'}</p>`}</div></div>
+      <div class="pos-list">${rows || `<p class="muted pad">Noch keine Position. ${ro ? '' : 'Mit „+ Position“ Kosten erfassen – oder Belege einfach hierher ziehen.'}</p>`}</div></div>
     <div class="card"><div class="card-head">Summen</div><div class="card-body" id="sums">${sumsHTML(d)}</div></div>
     ${ro ? '' : `<div class="actions">
       <button class="btn danger-ghost" data-action="del-draft">${ic('trash')} Entwurf löschen</button><span class="grow"></span>
@@ -382,7 +396,8 @@ function belegeHTML(p, ro, s) {
         <button type="button" class="bel-del" data-action="bel-del" data-id="${esc(b.id)}" aria-label="Beleg entfernen">${ic('x')}</button>`}</div>`).join('')}
     ${s.busy ? `<div class="bel busy"><span class="spinner"></span><span class="bel-name">wird verarbeitet …</span></div>` : ''}
     ${ro ? '' : `<button type="button" class="bel-add" data-action="bel-camera">${ic('camera')}<span>Foto aufnehmen</span></button>
-      <button type="button" class="bel-add" data-action="bel-file">${ic('file')}<span>Datei wählen</span></button>`}
+      <button type="button" class="bel-add" data-action="bel-file">${ic('file')}<span>Datei wählen</span></button>
+      <span class="drop-hint">oder Belege (Foto, PDF) hierher ziehen</span>`}
   </div>`;
 }
 function ocrHTML(s) {
@@ -799,6 +814,17 @@ document.addEventListener('input', e => {
   if (el.dataset.actionInput === 'ocr-toggle') { Ocr.setEnabled(el.checked); toast(el.checked ? 'Belegerkennung eingeschaltet.' : 'Belegerkennung ausgeschaltet.'); return; }
   if (el.dataset.dig && UI.pos) { const b = UI.pos.p.belege.find(x => x.id === el.dataset.dig); if (b) b.digital = el.checked; return; }
   if (el.dataset.actionInput === 'local-name') { Data.setLocalName(el.value); $('#user-name').textContent = el.value; return; }
+  if (el.dataset.dt) { // Datum/Stunde/Minute zu einem Wert zusammensetzen; unvollständig = Pflichtprüfung meldet „Uhrzeit fehlt“
+    const d = current();
+    if (!editable(d)) return;
+    const row = el.closest('.dt-row'), part = p => row.querySelector(`[data-part="${p}"]`).value;
+    const dd = part('d'), h = part('h'), m = part('m');
+    d.kopf[el.dataset.dt] = dd ? `${dd}T${h}:${m}` : '';
+    el.closest('.fld')?.classList.remove('err');
+    clearTimeout(kopfTimer);
+    kopfTimer = setTimeout(() => Data.touch(d), 500);
+    return;
+  }
   if (el.dataset.k) {
     const d = current();
     if (!editable(d)) return;
@@ -829,6 +855,26 @@ document.addEventListener('change', async e => {
     try { localStorage.setItem(SIG_KEY, await Media.signatureFromFile(f)); render(); toast('Unterschrift hinterlegt.'); }
     catch (err) { toast(err.message, 6000); }
   }
+});
+/* Belege per Drag & Drop: in die geöffnete Position, oder auf eine Reise im Entwurf (öffnet eine neue Position) */
+const hasFiles = e => [...(e.dataTransfer?.types || [])].includes('Files');
+function dropTarget() {
+  if (UI.pos) return UI.pos.ro ? null : 'pos';
+  const d = /^#\/reise\//.test(location.hash) ? current() : null;
+  return d && editable(d) && !$('#modal-root').childElementCount ? 'trip' : null;
+}
+let dragDepth = 0;
+document.addEventListener('dragenter', e => { if (!hasFiles(e)) return; dragDepth++; if (dropTarget()) document.body.classList.add('drop-on'); });
+document.addEventListener('dragleave', e => { if (!hasFiles(e)) return; if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('drop-on'); } });
+document.addEventListener('dragover', e => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = dropTarget() ? 'copy' : 'none'; });
+document.addEventListener('drop', async e => {
+  if (!hasFiles(e)) return;
+  e.preventDefault(); // sonst öffnet der Browser die Datei und verlässt die App
+  dragDepth = 0; document.body.classList.remove('drop-on');
+  const files = [...e.dataTransfer.files], where = dropTarget();
+  if (!files.length || !where) return;
+  if (where === 'trip') { const d = current(); openPos(d); }
+  await addFiles(files);
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { if ($('.preview')) closePreview(); else if (UI.pos) ACTIONS['pos-cancel'](); else if ($('#modal-root').childElementCount) ACTIONS['modal-close'](); }

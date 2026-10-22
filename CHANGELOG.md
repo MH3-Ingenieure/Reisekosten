@@ -1,5 +1,10 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.4.2 – 22.10.2026
+
+- Drag & Drop für Belege: in die geöffnete Position (fügt Belege hinzu) oder auf eine Reise im Entwurf (öffnet neue Position, Belegerkennung läuft); Rahmen zeigt die Ablagefläche; Hinweis „hierher ziehen“ nur auf Geräten mit Maus
+- Beginn/Ende als Datum + Stunde (00–23) + Minute (00–55 in 5er-Schritten) statt datetime-local; unvollständige Zeit meldet die Pflichtprüfung („Uhrzeit fehlt“); ältere Werte mit krummer Minute bleiben sichtbar
+
 ## 0.4.1 – 05.10.2026
 
 - PDF je Abrechnung in jedem Status (E-01/E-02, neues Modul pdf.js mit jsPDF 2.5.1 und jspdf-autotable 3.8.2 vom CDN): Kopf, Positionen, Bewirtungs- und Eigenbelegangaben, Summen, Status, Signaturen mit Bild, Prüfsumme; Belegfotos als eigene Seiten, PDF-Belege aufgeführt; Entwürfe mit Hinweis „ENTWURF“

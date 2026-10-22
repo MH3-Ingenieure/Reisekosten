@@ -1,6 +1,12 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.4.1';
+const APP_VERSION = '0.4.2';
 const APP_CHANGES = [
+  {
+    v: '0.4.2', d: '22.10.2026', items: [
+      'Belege per Drag & Drop: Fotos oder PDFs in die Position ziehen – oder direkt auf die Reise, dann öffnet sich eine neue Position mit dem Beleg',
+      'Beginn und Ende: Datum, volle Stunde und Minute in 5-Minuten-Schritten zur Auswahl'
+    ]
+  },
   {
     v: '0.4.1', d: '05.10.2026', items: [
       'PDF der Abrechnung in jedem Status (Knopf „PDF“ oben rechts): Angaben, Positionen, Bewirtung, Summen, Unterschriften, Prüfsumme und die Belegfotos',

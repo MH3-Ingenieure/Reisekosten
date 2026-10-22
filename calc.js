@@ -46,7 +46,10 @@ const Calc = (() => {
       need(k.land, 'land', 'Reiseziel (Land) fehlt.');
       need(k.beginn, 'beginn', 'Beginn der Reise (Datum und Uhrzeit) fehlt.');
       need(k.ende, 'ende', 'Ende der Reise (Datum und Uhrzeit) fehlt.');
-      if (k.beginn && k.ende && k.ende <= k.beginn) out.push({ key: 'ende', msg: 'Das Ende der Reise muss nach dem Beginn liegen.' });
+      const full = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+      if (k.beginn && !full.test(k.beginn)) out.push({ key: 'beginn', msg: 'Beginn der Reise: Uhrzeit fehlt.' });
+      if (k.ende && !full.test(k.ende)) out.push({ key: 'ende', msg: 'Ende der Reise: Uhrzeit fehlt.' });
+      if (full.test(k.beginn || '') && full.test(k.ende || '') && k.ende <= k.beginn) out.push({ key: 'ende', msg: 'Das Ende der Reise muss nach dem Beginn liegen.' });
     }
     if (!d.positionen.length) out.push({ key: 'positionen', msg: 'Es ist noch keine Kostenposition erfasst.' });
     d.positionen.forEach((p, i) => {
