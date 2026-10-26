@@ -40,10 +40,14 @@ const Ocr = (() => {
     src.close?.();
     return c;
   }
-  async function pdfText(blob) {
+  // PDF öffnen (auch für die Belegansicht: Teams sperrt den PDF-Betrachter des Browsers)
+  async function pdfDoc(blob) {
     await load(PDFJS);
     pdfjsLib.GlobalWorkerOptions.workerSrc = PDFW;
-    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+    return pdfjsLib.getDocument({ data: new Uint8Array(await blob.arrayBuffer()) }).promise;
+  }
+  async function pdfText(blob) {
+    const doc = await pdfDoc(blob);
     let text = '';
     for (let n = 1; n <= Math.min(doc.numPages, 3); n++) {
       const page = await doc.getPage(n), tc = await page.getTextContent();
@@ -195,5 +199,5 @@ const Ocr = (() => {
   }
   async function recognize(blob) { return parse(await read(blob)); }
 
-  return { recognize, parse, enabled, setEnabled, ready: () => !!worker };
+  return { recognize, parse, pdfDoc, enabled, setEnabled, ready: () => !!worker };
 })();

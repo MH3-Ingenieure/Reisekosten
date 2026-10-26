@@ -344,3 +344,11 @@ h2.sec { font-size: 13px; text-transform: uppercase; letter-spacing: .05em; colo
 @media (hover: none) { .drop-hint { display: none; } }
 body.drop-on .modal, body.drop-on #view .page { outline: 3px dashed var(--accent); outline-offset: -6px; }
 body.drop-on .modal .belege, body.drop-on .pos-list { background: var(--accent-l); }
+/* Belegansicht: PDF-Seiten selbst gezeichnet (pdf.js), scrollbar */
+.preview-body.pdf { justify-content: flex-start; overflow: auto; }
+.pdf-pages { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 4px 0 24px; width: 100%; }
+.pdf-pages canvas { background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.4); max-width: 100%; height: auto; }
+.preview-bar .pv-btn { color: #fff; background: transparent; border: 1px solid rgba(255,255,255,.6); }
+.preview-bar .pv-btn:hover { background: rgba(255,255,255,.15); }
+.preview-bar .pv-btn svg { width: 16px; height: 16px; }
+.preview-bar .pv-dl { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }

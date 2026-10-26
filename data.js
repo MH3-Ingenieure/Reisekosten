@@ -81,6 +81,11 @@ const Data = (() => {
     persist(); changed();
   }
   // Datei eines Belegs: aus dem Gerät oder aus der Anlage in SharePoint
+  // Adresse der Belegdatei in SharePoint (Anlage am Listeneintrag) – öffnet im Browser, dort immer speicherbar
+  function fileUrl(d, b) {
+    if (!cloud || !d?.spId || !b?.uploaded || !b.datei) return '';
+    return `${base()}/Lists/RK_Abrechnungen/Attachments/${d.spId}/${encodeURIComponent(b.datei)}`;
+  }
   async function fileOf(d, b) {
     const local = await Media.get(b.id).catch(() => null);
     if (local) return local;
@@ -744,7 +749,7 @@ const Data = (() => {
     drafts: () => S.drafts, claims: () => S.claims, inbox: () => (cloud ? S.inbox : S.claims), draft, claim, valid, pendingFor,
     notes: id => S.notes.filter(n => n.itemId === id), review: id => (S.review[id] = S.review[id] || { vermerke: {}, ablageort: '' }),
     clearReview: id => { delete S.review[id]; persist(); },
-    newDraft, touch, removeDraft, fileOf, act, protokoll, persist,
+    newDraft, touch, removeDraft, fileOf, fileUrl, act, protokoll, persist,
     members, addMember, removeMember, GROUPS, projects, addProject, setProject,
     setLocalName: n => { if (!cloud) { S.user.name = n; S.user.mail = n.trim().toLowerCase().replace(/\s+/g, '.') + '@lokal'; persist(); } },
     inTeams: () => teamsMode, signedIn: () => !cloud || !!account, Flow

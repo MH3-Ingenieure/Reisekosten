@@ -591,22 +591,48 @@ function dropFiles(d, belege) {
 }
 
 /* ---------- Belegvorschau (B-05) ---------- */
-let previewUrl = null;
+let previewUrl = null, previewBlob = null;
+// Datei speichern: Download; in Teams zusätzlich in neuem Fenster öffnen (Teams lässt Downloads aus Apps nicht immer zu)
+function saveFile(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  if (Data.inTeams?.()) setTimeout(() => window.open(url, '_blank'), 300);
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
 async function preview(b, d) {
   const box = document.createElement('div');
   box.className = 'preview';
-  box.innerHTML = `<div class="preview-bar"><span class="grow">${esc(b.name)}</span><button class="icon-btn" data-action="preview-close" aria-label="Schließen">${ic('x')}</button></div><div class="preview-body"><span class="spinner"></span></div>`;
+  box.innerHTML = `<div class="preview-bar"><span class="grow">${esc(b.name)}</span><span class="pv-dl"></span><button class="icon-btn" data-action="preview-close" aria-label="Schließen">${ic('x')}</button></div><div class="preview-body"><span class="spinner"></span></div>`;
   document.body.appendChild(box);
   try {
     const blob = (await Media.get(b.id).catch(() => null)) || (d && await Data.fileOf(d, b));
     if (!blob) throw new Error('Die Datei ist auf diesem Gerät nicht vorhanden.');
+    if (!box.isConnected) return;
     previewUrl = URL.createObjectURL(blob);
-    $('.preview-body', box).innerHTML = b.type === 'application/pdf'
-      ? `<iframe src="${previewUrl}" title="${esc(b.name)}"></iframe><a class="btn ghost small" href="${previewUrl}" target="_blank" rel="noopener">In neuem Fenster öffnen</a>`
-      : `<img src="${previewUrl}" alt="${esc(b.name)}">`;
+    previewBlob = { blob, name: b.name };
+    const spUrl = Data.fileUrl?.(d, b);
+    $('.pv-dl', box).innerHTML = `<button type="button" class="btn small pv-btn" data-action="preview-save">${ic('file')} Datei speichern</button>
+      ${spUrl ? `<a class="btn small pv-btn" href="${esc(spUrl)}" target="_blank" rel="noopener" title="Originaldatei aus SharePoint im Browser öffnen – dort speichern oder drucken">In SharePoint öffnen</a>` : ''}`;
+    const body = $('.preview-body', box);
+    if (b.type !== 'application/pdf' && blob.type !== 'application/pdf') { body.innerHTML = `<img src="${previewUrl}" alt="${esc(b.name)}">`; return; }
+    // PDF selbst zeichnen (pdf.js): Teams sperrt den eingebauten PDF-Betrachter in eingebetteten Apps
+    const doc = await Ocr.pdfDoc(blob);
+    body.innerHTML = '<div class="pdf-pages"></div>'; body.classList.add('pdf');
+    const pages = $('.pdf-pages', body), width = Math.min(body.clientWidth - 24, 1000);
+    for (let n = 1; n <= doc.numPages && box.isConnected; n++) {
+      const page = await doc.getPage(n), base = page.getViewport({ scale: 1 });
+      const scale = width / base.width, ratio = Math.min(2, window.devicePixelRatio || 1), vp = page.getViewport({ scale: scale * ratio });
+      const c = document.createElement('canvas');
+      c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      c.style.width = Math.round(vp.width / ratio) + 'px';
+      c.setAttribute('aria-label', `${b.name}, Seite ${n} von ${doc.numPages}`);
+      pages.appendChild(c);
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    }
   } catch (e) { $('.preview-body', box).innerHTML = `<p>${esc(e.message)}</p>`; }
 }
-function closePreview() { $('.preview')?.remove(); if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = null; }
+function closePreview() { $('.preview')?.remove(); if (previewUrl) URL.revokeObjectURL(previewUrl); previewUrl = null; previewBlob = null; }
 
 /* =====================================================================
    Einreichen mit Unterschrift (F-11, P-01)
@@ -768,6 +794,7 @@ const ACTIONS = {
   },
   'bel-open': el => { const s = UI.pos; preview(s.p.belege.find(b => b.id === el.dataset.id), Data.draft(s.draftId) || Data.claim(s.draftId)); },
   'preview-close': closePreview,
+  'preview-save': () => { if (previewBlob) { saveFile(previewBlob.blob, previewBlob.name); toast('Gespeichert: ' + previewBlob.name, 4000); } },
   'del-draft': async () => { const d = current(); if (d && await ask('Diesen Entwurf mit allen Positionen und Belegen löschen?', 'Löschen', true)) { await Data.removeDraft(d); location.hash = '#/'; toast('Entwurf gelöscht.'); } },
   submit: () => { const d = current(); if (editable(d)) startSubmit(d); },
   'modal-close': () => { $('#modal-root').innerHTML = ''; if (UI.pendingRender) render(); },

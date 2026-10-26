@@ -200,11 +200,7 @@ const Pdf = (() => {
   // Speichern: im Browser als Download; in Teams zusätzlich Öffnen in neuem Fenster (Downloads sind dort teils gesperrt)
   async function save(d) {
     const { blob, name } = await make(d);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
-    if (Data.inTeams?.()) setTimeout(() => window.open(url, '_blank'), 300);
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    saveFile(blob, name); // app.js
     return name;
   }
   return { make, save };

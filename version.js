@@ -1,6 +1,12 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.4.2';
+const APP_VERSION = '0.4.3';
 const APP_CHANGES = [
+  {
+    v: '0.4.3', d: '26.10.2026', items: [
+      'PDF-Belege werden wieder angezeigt, auch in Teams und auf dem iPhone (die App zeichnet die Seiten selbst)',
+      'Belegansicht: „Datei speichern“ für die Originaldatei; zusätzlich „In SharePoint öffnen“ – öffnet das Original im Browser, dort lässt es sich immer speichern'
+    ]
+  },
   {
     v: '0.4.2', d: '22.10.2026', items: [
       'Belege per Drag & Drop: Fotos oder PDFs in die Position ziehen – oder direkt auf die Reise, dann öffnet sich eine neue Position mit dem Beleg',

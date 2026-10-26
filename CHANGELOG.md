@@ -1,5 +1,10 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.4.3 – 26.10.2026
+
+- Belegansicht für PDF über pdf.js (Ocr.pdfDoc) statt iframe: Teams sperrt den eingebauten PDF-Betrachter in eingebetteten Apps (weiße Fläche)
+- „Datei speichern“ (Originaldatei, saveFile() auch für das Abrechnungs-PDF) und „In SharePoint öffnen“ (Data.fileUrl: Anlage am Eintrag in RK_Abrechnungen, öffnet im Browser)
+
 ## 0.4.2 – 22.10.2026
 
 - Drag & Drop für Belege: in die geöffnete Position (fügt Belege hinzu) oder auf eine Reise im Entwurf (öffnet neue Position, Belegerkennung läuft); Rahmen zeigt die Ablagefläche; Hinweis „hierher ziehen“ nur auf Geräten mit Maus
