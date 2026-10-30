@@ -619,10 +619,28 @@ const Data = (() => {
   async function pushDrafts() {
     for (const spId of [...S.trash]) {
       try { await sp(`${L('RK_Abrechnungen')}/items(${spId})/recycle`, { method: 'POST' }); }
-      catch (e) { if (e.status !== 404) throw e; }
+      catch (e) { if (!gone(e)) throw e; } // schon gelöscht
       S.trash = S.trash.filter(x => x !== spId); persist();
     }
     for (const d of S.drafts.filter(d => d.dirty)) {
+      try { await pushDraft(d); }
+      catch (e) {
+        if (!gone(e) || !d.spId) throw e;
+        let itemDa = true;
+        try { await sp(`${L('RK_Abrechnungen')}/items(${d.spId})?$select=Id`); } catch (e2) { if (gone(e2)) itemDa = false; else throw e2; }
+        if (itemDa) { d.removed = []; persist(); await pushDraft(d); continue; } // nur eine zu löschende Belegdatei fehlte
+        // Eintrag wurde in SharePoint gelöscht (z. B. Testdaten), auf dem Gerät gibt es aber neuere Eingaben:
+        // als neuen Eintrag anlegen und die Belege vom Gerät erneut hochladen
+        d.spId = null; d.removed = [];
+        for (const p of d.positionen) for (const b of p.belege) { b.uploaded = false; delete b.datei; }
+        persist();
+        await pushDraft(d);
+      }
+    }
+  }
+  const gone = e => e?.status === 404 || /nicht vorhanden|does not exist|nicht gefunden/i.test(e?.message || '');
+  async function pushDraft(d) {
+    {
       const stamp = d.updated;
       const fields = () => ({
         Title: (d.kopf.zweck || 'Neue Reise').slice(0, 250), EntwurfId: d.id, Status: d.status, Daten: JSON.stringify(toServer(d)),
@@ -635,12 +653,12 @@ const Data = (() => {
         const blob = await Media.get(b.id);
         if (!blob) continue; // Datei fehlt auf diesem Gerät (sollte nicht vorkommen)
         try { await sp(`${L('RK_Abrechnungen')}/items(${d.spId})/AttachmentFiles/add(FileName='${encodeURIComponent(b.datei)}')`, { method: 'POST', raw: blob }); }
-        catch (e) { if (!/exist|bereits/i.test(e.message)) throw e; }
+        catch (e) { if (gone(e) || !/already exists|exists already|bereits/i.test(e.message)) throw e; } // gleiche Datei schon vorhanden = erledigt
         b.uploaded = true; persist();
       }
       for (const name of [...(d.removed || [])]) {
         try { await sp(`${L('RK_Abrechnungen')}/items(${d.spId})/AttachmentFiles/getByFileName('${encodeURIComponent(name)}')`, { method: 'POST', del: true }); }
-        catch (e) { if (e.status !== 404) throw e; }
+        catch (e) { if (!gone(e)) throw e; } // Datei schon weg – erledigt (fehlt der ganze Eintrag, scheitert gleich updateItem)
         d.removed = d.removed.filter(x => x !== name); persist();
       }
       await updateItem('RK_Abrechnungen', d.spId, fields());

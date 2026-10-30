@@ -5,7 +5,8 @@ const APP_CHANGES = [
     v: '0.5.0', d: '30.10.2026', items: [
       'Projekte mit Bezeichnung: bei der Auswahl stehen Nummer und Bezeichnung, unter dem Feld die Bezeichnung des gewählten Projekts; auch in Prüfung und PDF',
       'Position verschieben: Position mit Belegen in eine andere offene Abrechnung oder in eine neue Auslage/Reise übernehmen – z. B. aus einer Belegsammlung',
-      'Die kaufmännische Prüfung pflegt die Projektliste (Reiter „Verwaltung“); Rollen vergibt weiterhin der Administrator'
+      'Die kaufmännische Prüfung pflegt die Projektliste (Reiter „Verwaltung“); Rollen vergibt weiterhin der Administrator',
+      'Behoben: „Das Element ist nicht vorhanden“ – wurde eine Abrechnung in SharePoint gelöscht, während auf dem Gerät noch Änderungen offen waren, legt die App sie mit den Belegen neu an'
     ]
   },
   {

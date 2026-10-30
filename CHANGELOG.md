@@ -7,6 +7,8 @@
 - Rechte: RK_Kostenstellen erhält eigene Rechte (perm 'master'): alle lesen wie bisher, Gruppe „RK Pruefung“ zusätzlich „Mitwirken“; Reiter „Verwaltung“ auch für die Prüfung (nur Projektliste, Rollen nur Administrator)
 - Position verschieben (applyPos/movePos/choose): in andere bearbeitbare Abrechnung oder neue Auslage/Reise; Belege werden an der Ziel-Abrechnung neu hochgeladen und an der alten entfernt; Projekt folgt der Ziel-Abrechnung, wenn es dem alten Kopfprojekt entsprach
 - Startseite: „In Bearbeitung (zwischengespeichert …)“; Hilfe zum Sammeln von Belegen
+- Abgleich robust gegen in SharePoint gelöschte Einträge (Fehler „Das Element ist nicht vorhanden“): pushDraft je Entwurf; fehlt der Eintrag nachweislich, wird er neu angelegt und die Belege vom Gerät erneut hochgeladen; fehlende Anlagen beim Löschen gelten als erledigt; „exists“ in Fehlermeldungen nicht mehr als „Datei schon vorhanden“ gewertet (nur „already exists“/„bereits“)
+- Test mit nachgebildetem SharePoint (test-sp.html, jetzt mit xlsx/ocr/import/pdf): Schema 3, Rechte RK Pruefung auf RK_Kostenstellen, Wiederanlage nach Löschung, Verschieben mit Anlage
 
 ## 0.4.3 – 26.10.2026
 
