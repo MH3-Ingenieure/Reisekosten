@@ -1,6 +1,12 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.5.1';
+const APP_VERSION = '0.5.2';
 const APP_CHANGES = [
+  {
+    v: '0.5.2', d: '30.10.2026', items: [
+      'Mehrere Belege auf einmal (z. B. 10 Monatsrechnungen eines Abos): Knopf „Mehrere Belege“ oder mehrere Dateien auf die Abrechnung ziehen – je Beleg eine eigene Position mit Betrag, Datum und Umsatzsteuer aus der Belegerkennung, nach Datum sortiert',
+      'So angelegte Positionen sind als „bitte prüfen“ markiert, bis sie einmal geöffnet und gespeichert wurden'
+    ]
+  },
   {
     v: '0.5.1', d: '30.10.2026', items: [
       'Behoben: Meldung „Das Element ist nicht vorhanden“ blieb, wenn Aufträge in SharePoint gelöscht wurden – die App vergisst solche Aufträge jetzt',

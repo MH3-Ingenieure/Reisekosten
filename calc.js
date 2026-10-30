@@ -55,6 +55,7 @@ const Calc = (() => {
     d.positionen.forEach((p, i) => {
       const pre = `Position ${i + 1} (${KA(p.kostenart).name}): `, pk = 'p:' + p.id;
       const add = msg => out.push({ key: pk, pos: p.id, msg: pre + msg });
+      if (!p.kostenart) add('Kostenart fehlt.');
       if (!p.datum) add('Datum fehlt.');
       if (isKm(p)) {
         if (!(Number(p.km) > 0)) add('Kilometer fehlen.');

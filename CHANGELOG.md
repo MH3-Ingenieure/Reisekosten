@@ -1,5 +1,11 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.5.2 – 30.10.2026 (Ä-34)
+
+- Stapel-Import (bulkAdd/fillFromOcr): „Mehrere Belege“ in der Kostenpositionen-Leiste (Dateiauswahl ohne offene Position) und Ziehen mehrerer Dateien auf die Abrechnung legen je Beleg eine Position an; Belegerkennung je Datei, Kostenart sonst „Sonstiges“; Fortschrittsanzeige; Hinweis auf bereits erfasste Belege (Prüfsumme)
+- Markierung p.pruefen („bitte prüfen“) bis zum ersten Speichern der Position; geht nicht in die Prüfsumme ein
+- Pflichtprüfung: „Kostenart fehlt“
+
 ## 0.5.1 – 30.10.2026
 
 - pollPending: in SharePoint gelöschte Aufträge (RK_Aktionen) über gone() erkennen (nicht nur Status 404) und aus S.pending entfernen – Ursache der bleibenden Meldung „Das Element ist nicht vorhanden“; ebenso beim Entfernen von Listenrechten

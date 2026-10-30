@@ -214,8 +214,10 @@ function tripView(d) {
     ${UI.errors?.id === d.id ? `<div class="banner bad">${ic('warn')}<div>Vor dem Einreichen fehlen noch Angaben – die Felder sind rot markiert.</div></div>` : ''}
     ${head}
     <div class="card${E('positionen') ? ' err-card' : ''}"><div class="card-head">Kostenpositionen<span class="grow"></span>
-      ${ro ? '' : `<button class="btn primary small" data-action="add-pos">${ic('plus')} Position</button>`}</div>
-      <div class="pos-list">${rows || `<p class="muted pad">Noch keine Position. ${ro ? '' : 'Mit „+ Position“ Kosten erfassen – oder Belege einfach hierher ziehen.'}</p>`}</div></div>
+      ${ro ? '' : `<button class="btn ghost small" data-action="bulk-pick" title="Mehrere Belege auf einmal: je Beleg eine Position (z. B. Monatsrechnungen eines Abos)">${ic('file')} Mehrere Belege</button>
+        <button class="btn primary small" data-action="add-pos">${ic('plus')} Position</button>`}</div>
+      ${UI.bulk?.id === d.id ? `<div class="banner wait bulk-run"><span class="spinner"></span><div>Belege werden gelesen: <b>${UI.bulk.done} von ${UI.bulk.total}</b> … Jeder Beleg wird eine eigene Position.</div></div>` : ''}
+      <div class="pos-list">${rows || `<p class="muted pad">Noch keine Position. ${ro ? '' : 'Mit „+ Position“ Kosten erfassen – oder Belege einfach hierher ziehen. Mehrere Belege auf einmal (z. B. 10 Monatsrechnungen) über „Mehrere Belege“: je Beleg eine Position.'}</p>`}</div></div>
     <div class="card"><div class="card-head">Summen</div><div class="card-body" id="sums">${sumsHTML(d)}</div></div>
     ${ro ? '' : `<div class="actions">
       <button class="btn danger-ghost" data-action="del-draft">${ic('trash')} Entwurf löschen</button><span class="grow"></span>
@@ -242,7 +244,8 @@ function posRow(d, p, i, err, ro) {
     : p.eigenbeleg ? '<span class="belcount eigen">Eigenbeleg</span>' : `<span class="belcount miss">${ic('warn')}kein Beleg</span>`;
   const proj = projektOf(d, p), projNote = proj && proj !== String(d.kopf.kostenstelle || '').trim() ? `<span class="pos-sub">Projekt: ${esc(projLabel(proj))}</span>` : '';
   const eigen = p.eigenbeleg && ro ? `<span class="pos-note warn">Eigenbeleg: ${esc(p.eigenbelegGrund || '')}</span>` : ''; // B-06: in der Prüfung sichtbar
-  const note = d.pruefung?.[p.id]?.kommentar ? `<span class="pos-note">Prüfung: ${esc(d.pruefung[p.id].kommentar)}</span>` : '';
+  const note = (d.pruefung?.[p.id]?.kommentar ? `<span class="pos-note">Prüfung: ${esc(d.pruefung[p.id].kommentar)}</span>` : '')
+    + (p.pruefen && !ro ? '<span class="pos-note warn">Aus mehreren Belegen angelegt – bitte öffnen, prüfen und speichern</span>' : '');
   return `<button class="pos-row${err ? ' err' : ''}" data-action="${ro ? 'view-pos' : 'edit-pos'}" data-id="${esc(p.id)}">
     <span class="pos-n">${i + 1}</span>
     <span class="pos-main"><b>${esc(ka.name)}</b> <span class="muted">${fmtDate(p.datum)}</span>${sub ? `<span class="pos-sub">${sub}</span>` : ''}${projNote}${eigen}${note}</span>
@@ -500,6 +503,46 @@ function posInput(el) {
   if (f === 'ust' && $('#ust-calc')) $('#ust-calc').textContent = ustText(p, s.raw.brutto);
   if (f === 'datum' && isKm(p)) posInput($('[data-p="km"]'));
 }
+/* Stapel: mehrere Belege → je Beleg eine Position, Werte aus der Belegerkennung (z. B. Monatsrechnungen eines Abos) */
+function fillFromOcr(d, p, f) {
+  const k = f.kostenart ? KA(f.kostenart) : null;
+  if (k && k.art !== 'km') { p.kostenart = k.key; p.ust = k.ust; }
+  if (f.brutto) p.brutto = f.brutto;
+  if (f.datum) p.datum = f.datum;
+  if (f.ust != null) p.ust = f.ust;
+  if (f.split?.length > 1 && f.split.reduce((s, t) => s + t.brutto, 0) === p.brutto) { p.ustSplit = f.split.map(t => ({ satz: t.satz, brutto: t.brutto })); p.ust = 19; }
+  p.bemerkung = [f.aussteller, f.ort].filter(Boolean).join(', ');
+  if (isBew(p)) p.bewirtung.ort = p.bemerkung;
+}
+async function bulkAdd(d, files) {
+  if (!editable(d) || !files.length || UI.bulk) return;
+  const known = new Set([...Data.drafts(), ...Data.claims()].flatMap(x => x.positionen.flatMap(p => p.belege.map(b => b.sha256))));
+  const fallback = Data.master().kostenarten.find(k => k.key === 'sonstiges' && k.aktiv !== false)?.key || '';
+  const neu = [], fehler = []; let doppelt = 0;
+  UI.bulk = { id: d.id, total: files.length, done: 0 }; render();
+  for (const f of files) {
+    try {
+      const r = await Media.prepare(f), id = uid();
+      await Media.put(id, r.blob);
+      if (known.has(r.sha256)) doppelt++;
+      known.add(r.sha256);
+      const p = blankPos(d);
+      p.belege = [{ id, name: r.name, type: r.type, size: r.size, sha256: r.sha256, thumb: r.thumb, uploaded: false, digital: r.type === 'application/pdf' }];
+      p.pruefen = true; // aus dem Stapel: bis zum ersten Speichern als „bitte prüfen“ markiert
+      if (Ocr.enabled()) { try { fillFromOcr(d, p, await Ocr.recognize(r.blob)); } catch { /* ohne Erkennung weiter */ } }
+      if (!p.kostenart) p.kostenart = fallback;
+      neu.push(p);
+    } catch (e) { fehler.push(`${f.name}: ${e.message}`); }
+    UI.bulk.done++; renderSoft();
+  }
+  neu.sort((a, b) => String(a.datum).localeCompare(String(b.datum)));
+  d.positionen.push(...neu);
+  UI.bulk = null;
+  Data.touch(d); render();
+  toast(`${neu.length} Position${neu.length === 1 ? '' : 'en'} angelegt – bitte jede kurz prüfen (Betrag, Datum, Kostenart).`
+    + (doppelt ? ` Hinweis: ${doppelt} Beleg${doppelt === 1 ? ' ist' : 'e sind'} bereits erfasst.` : '')
+    + (fehler.length ? ` Nicht übernommen: ${fehler.join('; ')}` : ''), 9000);
+}
 async function addFiles(files) {
   const s = UI.pos;
   if (!s) return;
@@ -588,6 +631,7 @@ function applyPos() {
     }
   }
   if (!isBew(p)) p.bewirtung = { anlass: '', teilnehmer: '', ort: '' };
+  delete p.pruefen; // vom Mitarbeiter geprüft
   const i = d.positionen.findIndex(x => x.id === p.id);
   if (i >= 0) d.positionen[i] = p; else d.positionen.push(p);
   dropFiles(d, s.removed); s.removed = [];
@@ -850,6 +894,7 @@ const ACTIONS = {
   'ocr-run': () => { const s = UI.pos; if (s?.p.belege.length) runOcr(s.p.belege[s.p.belege.length - 1], true); },
   'bel-camera': () => $('#pick-camera').click(),
   'bel-file': () => $('#pick-file').click(),
+  'bulk-pick': () => { const d = current(); if (editable(d) && !UI.bulk) $('#pick-file').click(); }, // ohne offene Position: Stapel (siehe change)
   'bel-del': el => {
     const s = UI.pos, b = s.p.belege.find(x => x.id === el.dataset.id);
     s.p.belege = s.p.belege.filter(x => x !== b);
@@ -940,7 +985,11 @@ document.addEventListener('change', async e => {
   if (el.dataset.proj) return Review.toggleProject(el);
   if (el.dataset.projBez) return Review.renameProject(el);
   if (el.dataset.k === 'vorschuss') { const d = current(); if (d) el.value = moneyIn(d.kopf.vorschuss); }
-  if (el.id === 'pick-camera' || el.id === 'pick-file') { const files = [...el.files]; el.value = ''; await addFiles(files); }
+  if (el.id === 'pick-camera' || el.id === 'pick-file') {
+    const files = [...el.files]; el.value = '';
+    if (UI.pos) await addFiles(files);
+    else { const d = current(); if (d) await bulkAdd(d, files); } // „Mehrere Belege“ auf der Reise
+  }
   if (el.id === 'pick-import') { const f = el.files[0]; el.value = ''; if (f) await Import.onFile(f); }
   if (el.id === 'pick-signature') {
     const f = el.files[0]; el.value = '';
@@ -966,6 +1015,7 @@ document.addEventListener('drop', async e => {
   dragDepth = 0; document.body.classList.remove('drop-on');
   const files = [...e.dataTransfer.files], where = dropTarget();
   if (!files.length || !where) return;
+  if (where === 'trip' && files.length > 1) return bulkAdd(current(), files); // mehrere Belege auf die Reise: je Beleg eine Position
   if (where === 'trip') { const d = current(); openPos(d); }
   await addFiles(files);
 });
