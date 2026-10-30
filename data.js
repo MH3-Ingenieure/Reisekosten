@@ -475,7 +475,7 @@ const Data = (() => {
     if (kind !== 'roles') await sp(L(t), { method: 'POST', merge: true, body: { __metadata: { type: 'SP.List' }, ReadSecurity: 2, WriteSecurity: 2 } });
     await sp(`${L(t)}/breakroleinheritance(copyRoleAssignments=true,clearSubscopes=true)`, { method: 'POST' });
     if (kind === 'roles') { // Mitarbeiter (Besucher) sehen diese Listen nicht
-      try { await sp(`${L(t)}/roleassignments/getbyprincipalid(${ctx.visitors})/deleteobject()`, { method: 'POST' }); } catch (e) { if (e.status !== 404) throw e; }
+      try { await sp(`${L(t)}/roleassignments/getbyprincipalid(${ctx.visitors})/deleteobject()`, { method: 'POST' }); } catch (e) { if (!gone(e)) throw e; }
     } else await sp(`${L(t)}/roleassignments/addroleassignment(principalid=${ctx.visitors},roledefid=${ctx.contribute})`, { method: 'POST' });
     if (kind !== 'own') for (const gid of Object.values(ctx.groups)) await sp(`${L(t)}/roleassignments/addroleassignment(principalid=${gid},roledefid=${ctx.readAll})`, { method: 'POST' });
   }
@@ -672,7 +672,7 @@ const Data = (() => {
     for (const p of [...S.pending]) {
       let it;
       try { it = await sp(`${L('RK_Aktionen')}/items(${p.id})?$select=Ergebnis,Grund`); }
-      catch (e) { if (e.status === 404) { S.pending = S.pending.filter(x => x !== p); continue; } throw e; }
+      catch (e) { if (gone(e)) { S.pending = S.pending.filter(x => x !== p); persist(); continue; } throw e; } // Auftrag in SharePoint gelöscht (z. B. Testdaten aufgeräumt)
       if (it.Ergebnis !== 'erledigt' && it.Ergebnis !== 'abgelehnt') continue;
       S.pending = S.pending.filter(x => x !== p);
       changed = true;

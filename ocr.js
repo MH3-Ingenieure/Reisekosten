@@ -75,7 +75,7 @@ const Ocr = (() => {
     ['taxi', /taxi|ö?pnv|rheinbahn|vrr|bvg|mvv|hvv|kvb|uber|free\s?now|einzelfahrschein|tageskarte|deutschlandticket/],
     ['mietwagen', /sixt|europcar|avis|hertz|enterprise|autovermietung|mietwagen|rent a car/],
     ['kraftstoff', /aral|shell|esso|\bjet\b|totalenergies|total tankstelle|agip|avia|tankstelle|diesel|super e10|super e5|kraftstoff|liter|zapfs/],
-    ['parken', /parkhaus|parken|parkschein|parkgeb|contipark|apcoa|q-park|ein-?\s?ausfahrt|maut|toll/],
+    ['parken', /parkhaus|parken|parkschein|parkgeb|parkzone|parkvorgang|parkdauer|parkticket|contipark|apcoa|q-park|peuka|easypark|parkster|paybyphone|mobilet|ein-?\s?ausfahrt|maut|toll/],
     ['hotel', /hotel|übernachtung|logis|motel one|ibis|b&b|booking\.com|zimmer|check-?in|frühstück.*inkl|city tax|beherbergung/],
     ['bewirtung', /restaurant|gaststätte|gaststatte|gastst|gasthaus|bewirtung|ristorante|pizzeria|trattoria|bistro|brauhaus|café|cafe|speisen|getränke|getranke|tisch\s?-?\s?n?r?\.?:?\s?\d|bedienung|bedient|kellner|trinkgeld/]
   ];
@@ -101,7 +101,8 @@ const Ocr = (() => {
     if (dates.length) out.datum = dates[0];
 
     // Beträge: „12,50“ und „12.50“; Tausenderpunkt erlaubt
-    const AMT = /(?<![\d.,])(\d{1,3}(?:[.\s]\d{3})+|\d{1,5})[,.](\d{2})(?![\d%])/g;
+    // nicht in Datumsangaben („29.10.2026“, „30.09. 2026“) und nicht vor Prozent
+    const AMT = /(?<![\d.,])(\d{1,3}(?:[.\s]\d{3})+|\d{1,5})[,.](\d{2})(?![\d%]|[.,]\s?\d)/g;
     const amounts = l => [...l.matchAll(AMT)].map(m => toCent(m[1] + ',' + m[2])).filter(c => c > 0 && c < 1000000);
     // Endbetrag: Zeile mit „Total“, „Summe“ … – steht der Betrag in der Zeile darunter, auch diese
     const SKIP = /rückgeld|gegeben|netto|zwischensumme|mwst|ust\b|steuer|trinkgeld/i;
@@ -110,7 +111,7 @@ const Ocr = (() => {
       const a = amounts(l);
       return a.length ? a : (lines[i + 1] && !SKIP.test(lines[i + 1]) ? amounts(lines[i + 1]) : []);
     });
-    const best = [/total|summe|gesamt|zu zahlen|zahlbetrag|endbetrag|rechnungsbetrag|gesamtbetrag/, /betrag|brutto|ec-?karte|kartenzahlung|girocard|visa|mastercard|unbar|eur\b|€/];
+    const best = [/total|summe|gesamt|zu zahlen|zahlbetrag|endbetrag|rechnungsbetrag|gesamtbetrag|quittungsbetrag|bezahlter betrag|zahlungsbetrag/, /betrag|brutto|ec-?karte|kartenzahlung|girocard|visa|mastercard|unbar|eur\b|€/];
     for (const re of best) { const c = pick(re); if (c.length) { out.brutto = Math.max(...c); break; } }
     if (out.brutto == null) { const all = lines.filter(l => !/rückgeld|gegeben|tel|fax|iban|steuer-?nr/i.test(l)).flatMap(amounts); if (all.length) out.brutto = Math.max(...all); }
 
@@ -167,6 +168,25 @@ const Ocr = (() => {
     if (rates.has(7) && rates.has(19)) out.mixed = true;
     else if (rates.size) out.ust = [...rates][0];
     if (tip) out.trinkgeld = tip;
+
+    // Blöcke „Betrag (inkl. USt.) 1,50 € … USt. % 0 %“ (z. B. Parkquittung: Parken 0 %, Gebühr 19 %)
+    const blocks = {};
+    lines.forEach((l, i) => {
+      if (!/inkl|einschl|brutto/i.test(l) || !/ust|mwst|steuer/i.test(l)) return;
+      const a = amounts(l);
+      if (a.length !== 1) return;
+      for (let j = i + 1; j <= i + 4 && j < lines.length; j++) {
+        const m = lines[j].match(/(?:ust|mwst)[^\d\n]{0,8}?(\d{1,2})(?:[,.]0{1,2})?\s?%/i);
+        if (m && [0, 7, 19].includes(Number(m[1]))) { blocks[m[1]] = (blocks[m[1]] || 0) + a[0]; return; }
+      }
+    });
+    const bl = Object.entries(blocks).map(([satz, brutto]) => ({ satz: Number(satz), brutto }));
+    if (bl.length && out.brutto && near(bl.reduce((s, t) => s + t.brutto, 0), out.brutto - tip)) {
+      if (tip) bl.push({ satz: 0, brutto: tip });
+      const merged = Object.values(bl.reduce((o, t) => { (o[t.satz] = o[t.satz] || { satz: t.satz, brutto: 0 }).brutto += t.brutto; return o; }, {}));
+      if (merged.length > 1) { out.split = merged; out.mixed = true; delete out.ust; }
+      else { out.ust = merged[0].satz; delete out.split; delete out.mixed; }
+    }
 
     // Einzelpositionen (Text + Betrag am Zeilenende) bis zur Summen-/Steuerzeile – zum Antippen im Rechner
     const items = [];

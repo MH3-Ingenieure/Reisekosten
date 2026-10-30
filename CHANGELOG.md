@@ -1,5 +1,11 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.5.1 – 30.10.2026
+
+- pollPending: in SharePoint gelöschte Aufträge (RK_Aktionen) über gone() erkennen (nicht nur Status 404) und aus S.pending entfernen – Ursache der bleibenden Meldung „Das Element ist nicht vorhanden“; ebenso beim Entfernen von Listenrechten
+- Belegerkennung: AMT ohne Treffer in Datumsangaben (Folgezeichen „.d“ bzw. „. d“); „Quittungsbetrag“ u. a. als Endbetrag; Blöcke „Betrag (inkl. USt.) … USt. % N %“ ergeben die Aufteilung (0/7/19 %); Kostenart Parken für Park-Apps; getestet mit Peuka-Quittung (1,89 € = 1,50 € zu 0 % + 0,39 € zu 19 %)
+- Anteil ohne Umsatzsteuer heißt „z. B. Trinkgeld, Parkentgelt“, Anzeige „ohne USt“ statt „Trinkgeld“
+
 ## 0.5.0 – 30.10.2026 (Ä-31 bis Ä-33)
 
 - RK_Kostenstellen: neue Spalte „Bezeichnung“ (SCHEMA 3; legt der Administrator beim ersten Öffnen an; bis dahin liest die App ohne die Spalte); Auswahllisten mit label, Anzeige der Bezeichnung unter dem Feld, in Lesesicht, Positionszeile und PDF (projLabel)

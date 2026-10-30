@@ -28,7 +28,7 @@ const Pdf = (() => {
   function beschreibung(p) {
     if (isKm(p)) return `${p.strecke || ''}\n${String(p.km).replace('.', ',')} km × ${eur(p.kmSatz)}`;
     const parts = [p.bemerkung];
-    if (p.ustSplit?.length > 1) parts.push(p.ustSplit.map(t => `${eur(t.brutto)} ${t.satz ? 'zu ' + t.satz + ' %' : 'Trinkgeld'}`).join(' + '));
+    if (p.ustSplit?.length > 1) parts.push(p.ustSplit.map(t => `${eur(t.brutto)} ${t.satz ? 'zu ' + t.satz + ' %' : 'ohne USt'}`).join(' + '));
     return parts.filter(Boolean).join('\n');
   }
   function belegText(p) {

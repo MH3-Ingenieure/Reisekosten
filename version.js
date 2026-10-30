@@ -1,6 +1,13 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.5.0';
+const APP_VERSION = '0.5.1';
 const APP_CHANGES = [
+  {
+    v: '0.5.1', d: '30.10.2026', items: [
+      'Behoben: Meldung „Das Element ist nicht vorhanden“ blieb, wenn Aufträge in SharePoint gelöscht wurden – die App vergisst solche Aufträge jetzt',
+      'Belegerkennung: Datumsangaben („29.10.2026“) werden nicht mehr als Betrag gelesen; „Quittungsbetrag“ als Endbetrag; Park-Apps (z. B. Peuka, EasyPark) als Parken',
+      'Belege mit Anteilen zu 0 % und 19 % (z. B. Parkentgelt + Gebühr) werden automatisch aufgeteilt'
+    ]
+  },
   {
     v: '0.5.0', d: '30.10.2026', items: [
       'Projekte mit Bezeichnung: bei der Auswahl stehen Nummer und Bezeichnung, unter dem Feld die Bezeichnung des gewählten Projekts; auch in Prüfung und PDF',

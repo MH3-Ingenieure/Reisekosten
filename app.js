@@ -354,7 +354,7 @@ function ustText(p, raw) {
     if (Number.isNaN(m.b) || !m.b) return '';
     if (m.a19 < 0) return 'Die Anteile sind größer als der Betrag – bitte prüfen.';
     const tax = [[7, m.a7], [19, m.a19]].filter(([, g]) => g > 0).map(([z, g]) => `${money(g - net(g, z))} zu ${z} %`);
-    return `darin Umsatzsteuer ${tax.join(' und ') || '0,00 €'}${m.a0 ? `; ${money(m.a0)} ohne Umsatzsteuer (Trinkgeld)` : ''}`;
+    return `darin Umsatzsteuer ${tax.join(' und ') || '0,00 €'}${m.a0 ? `; ${money(m.a0)} ohne Umsatzsteuer` : ''}`;
   }
   const b = parseMoney(raw), z = Number(p.ust) || 0;
   if (Number.isNaN(b) || !b) return '';
@@ -367,7 +367,7 @@ function mixHTML(s, dis) {
     ${dis ? '' : `<button type="button" class="btn ghost small" data-action="calc-open" data-f="${f}" title="Taschenrechner">${CALC_IC} Rechner</button>`}</div></div>`;
   return `<div class="sub-card mix"><div class="sub-title">Aufteilung nach Steuersatz</div><div class="grid">
     ${field('s7', 'davon zu 7 % (z. B. Speisen, Übernachtung)')}
-    ${field('s0', 'davon ohne Umsatzsteuer (Trinkgeld)')}
+    ${field('s0', 'davon ohne Umsatzsteuer (z. B. Trinkgeld, Parkentgelt)')}
     <div class="fld wide"><span>Rest zu 19 % (z. B. Getränke, Frühstück)</span><div class="calc" id="mix-19">${money(Math.max(0, m.a19))}</div></div></div>
     ${s.calc && !dis ? calcHTML(s) : ''}</div>`;
 }
@@ -416,7 +416,7 @@ function ocrHTML(s) {
   if (f.kostenart) parts.push(KA(f.kostenart).name);
   if (f.brutto) parts.push(money(f.brutto));
   if (f.datum) parts.push(fmtDate(f.datum));
-  if (f.split) parts.push(f.split.map(t => `${money(t.brutto)} ${t.satz ? 'zu ' + t.satz + ' %' : 'Trinkgeld'}`).join(' + '));
+  if (f.split) parts.push(f.split.map(t => `${money(t.brutto)} ${t.satz ? 'zu ' + t.satz + ' %' : 'ohne USt'}`).join(' + '));
   else if (f.ust != null) parts.push(f.ust + ' % USt');
   if (f.aussteller) parts.push(f.aussteller);
   if (f.ort) parts.push(f.ort);
@@ -454,7 +454,7 @@ function renderPos() {
         <label class="check"><input type="checkbox" data-p="eigenbeleg"${p.eigenbeleg ? ' checked' : ''}${dis}> Eigenbeleg – der Originalbeleg ist verloren gegangen</label>
         ${p.eigenbeleg ? `<label class="fld"><span>Begründung für den Eigenbeleg</span><textarea data-p="eigenbelegGrund" rows="2"${dis}>${esc(p.eigenbelegGrund)}</textarea></label>` : ''}
         <div class="grid"><label class="fld"><span>Umsatzsteuersatz</span><select data-p="ust"${dis}>${[19, 7, 0].map(v => `<option value="${v}"${!s.mixed && Number(p.ust) === v ? ' selected' : ''}>${v} %</option>`).join('')}
-          <option value="mix"${s.mixed ? ' selected' : ''}>gemischt (7 % / 19 % / Trinkgeld)</option></select></label>
+          <option value="mix"${s.mixed ? ' selected' : ''}>gemischt (7 % / 19 % / ohne USt)</option></select></label>
         <div class="fld"><span>Zahlungsart</span><div class="seg">${Object.entries(ZAHLUNG).map(([k, l]) => `<button type="button" class="${p.zahlungsart === k ? 'on' : ''}" data-action="pos-pay" data-key="${k}"${dis}>${l}</button>`).join('')}</div></div>
         ${projekt}</div>${mixHTML(s, dis)}`;
       if (ka.art === 'bewirtung') body += `<div class="sub-card"><div class="sub-title">Bewirtung (Pflichtangaben)</div><div class="grid">
