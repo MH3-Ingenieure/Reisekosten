@@ -69,8 +69,8 @@ const Pdf = (() => {
     // Angaben zur Abrechnung
     const wer = d.erstellerName || Data.user()?.name || '';
     const rows = aus
-      ? [['Art', artName(d)], ['Mitarbeiter', wer], ['Wofür', k.zweck], ['Projekt / Kostenstelle', k.kostenstelle], ['Belegdatum', whenText(d)]]
-      : [['Art', artName(d)], ['Mitarbeiter', wer], ['Reisezweck', k.zweck], ['Projekt / Kostenstelle', k.kostenstelle],
+      ? [['Art', artName(d)], ['Mitarbeiter', wer], ['Wofür', k.zweck], ['Projekt / Kostenstelle', projLabel(k.kostenstelle)], ['Belegdatum', whenText(d)]]
+      : [['Art', artName(d)], ['Mitarbeiter', wer], ['Reisezweck', k.zweck], ['Projekt / Kostenstelle', projLabel(k.kostenstelle)],
         ['Reiseziel', [k.ort, k.land].filter(Boolean).join(', ')], ['Beginn', fmtDT(k.beginn)], ['Ende', fmtDT(k.ende)]];
     if (k.vorschuss) rows.push(['Vorschuss', eur(k.vorschuss)]);
     doc.autoTable({
@@ -82,7 +82,7 @@ const Pdf = (() => {
     // Positionen
     const body = d.positionen.map((p, i) => {
       const u = ustInfo(p);
-      return [i + 1, fmtDate(p.datum), KA(p.kostenart).name, beschreibung(p), projektOf(d, p), isKm(p) ? 'privat' : (ZAHLUNG[p.zahlungsart] || ''), u.satz, u.betrag ? eur(u.betrag) : '–', eur(betrag(p)), belegText(p)].map(safe);
+      return [i + 1, fmtDate(p.datum), KA(p.kostenart).name, beschreibung(p), projLabel(projektOf(d, p)), isKm(p) ? 'privat' : (ZAHLUNG[p.zahlungsart] || ''), u.satz, u.betrag ? eur(u.betrag) : '–', eur(betrag(p)), belegText(p)].map(safe);
     });
     doc.autoTable({
       startY: doc.lastAutoTable.finalY + 5, margin: { left: M, right: M },

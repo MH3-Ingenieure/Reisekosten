@@ -1,5 +1,13 @@
 # Änderungsprotokoll Reisekosten
 
+## 0.5.0 – 30.10.2026 (Ä-31 bis Ä-33)
+
+- RK_Kostenstellen: neue Spalte „Bezeichnung“ (SCHEMA 3; legt der Administrator beim ersten Öffnen an; bis dahin liest die App ohne die Spalte); Auswahllisten mit label, Anzeige der Bezeichnung unter dem Feld, in Lesesicht, Positionszeile und PDF (projLabel)
+- Verwaltung: Nummer und Bezeichnung getrennt erfassen, Bezeichnung bestehender Projekte nachtragen (Data.setProjectName)
+- Rechte: RK_Kostenstellen erhält eigene Rechte (perm 'master'): alle lesen wie bisher, Gruppe „RK Pruefung“ zusätzlich „Mitwirken“; Reiter „Verwaltung“ auch für die Prüfung (nur Projektliste, Rollen nur Administrator)
+- Position verschieben (applyPos/movePos/choose): in andere bearbeitbare Abrechnung oder neue Auslage/Reise; Belege werden an der Ziel-Abrechnung neu hochgeladen und an der alten entfernt; Projekt folgt der Ziel-Abrechnung, wenn es dem alten Kopfprojekt entsprach
+- Startseite: „In Bearbeitung (zwischengespeichert …)“; Hilfe zum Sammeln von Belegen
+
 ## 0.4.3 – 26.10.2026
 
 - Belegansicht für PDF über pdf.js (Ocr.pdfDoc) statt iframe: Teams sperrt den eingebauten PDF-Betrachter in eingebetteten Apps (weiße Fläche)

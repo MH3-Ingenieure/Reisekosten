@@ -16,7 +16,7 @@ const Data = (() => {
   const cfg = window.APP_CONFIG || {};
   const cloud = !!(cfg.tenantId && cfg.clientId && cfg.siteUrl);
   const KEY = 'reisekosten.v1';
-  const SCHEMA = 2; // erhöhen, wenn Listen neue Spalten bekommen
+  const SCHEMA = 3; // erhöhen, wenn Listen neue Spalten bekommen
 
   /* ---------- Stammdaten (Vorbelegung, im Betrieb aus SharePoint) ---------- */
   const KOSTENARTEN = [
@@ -427,7 +427,7 @@ const Data = (() => {
       desc: 'Reisekosten: Sätze mit „gültig ab“ (Kilometersatz in Euro je km)', fields: [F('Art', 'Text'), F('Wert', 'Number'), F('GueltigAb', 'DateOnly')],
       seed: () => [{ Title: 'Kilometersatz Privat-Pkw', Art: 'km', Wert: 0.3, GueltigAb: '2000-01-01T00:00:00Z' }]
     },
-    RK_Kostenstellen: { desc: 'Reisekosten: Projekte und Kostenstellen (Auswahlliste)', fields: [F('Aktiv', 'Boolean')] }
+    RK_Kostenstellen: { desc: 'Reisekosten: Projekte und Kostenstellen (Auswahlliste)', perm: 'master', fields: [F('Aktiv', 'Boolean'), F('Bezeichnung', 'Text')] }
   };
   function fieldXml({ n, t }) {
     const a = `Name="${n}" StaticName="${n}" DisplayName="${n}"`;
@@ -467,6 +467,11 @@ const Data = (() => {
     return (await sp('web/roledefinitions', { method: 'POST', body: { __metadata: { type: 'SP.RoleDefinition' }, Name: READ_ALL.name, Description: READ_ALL.desc, Order: 190, BasePermissions: { __metadata: { type: 'SP.BasePermissions' }, ...mask(READ_ALL.kinds) } } })).Id;
   }
   async function applyPerms(t, kind, ctx) {
+    if (kind === 'master') { // Stammdaten: alle lesen, die kaufmännische Prüfung pflegt sie mit
+      await sp(`${L(t)}/breakroleinheritance(copyRoleAssignments=true,clearSubscopes=true)`, { method: 'POST' });
+      await sp(`${L(t)}/roleassignments/addroleassignment(principalid=${ctx.groups.pruefung},roledefid=${ctx.contribute})`, { method: 'POST' });
+      return;
+    }
     if (kind !== 'roles') await sp(L(t), { method: 'POST', merge: true, body: { __metadata: { type: 'SP.List' }, ReadSecurity: 2, WriteSecurity: 2 } });
     await sp(`${L(t)}/breakroleinheritance(copyRoleAssignments=true,clearSubscopes=true)`, { method: 'POST' });
     if (kind === 'roles') { // Mitarbeiter (Besucher) sehen diese Listen nicht
@@ -541,8 +546,11 @@ const Data = (() => {
       .sort((a, b) => a.order - b.order);
     const sz = await getAll(`${L('RK_Saetze')}/items?$select=Art,Wert,GueltigAb&$top=500`);
     if (sz.length) S.master.saetze = sz.map(s => ({ art: s.Art, wert: Math.round(Number(s.Wert) * 100), ab: (s.GueltigAb || '2000-01-01').slice(0, 10) }));
-    const ks = await getAll(`${L('RK_Kostenstellen')}/items?$select=Title,Aktiv&$top=1000`);
-    S.master.kostenstellen = ks.filter(k => k.Aktiv !== false).map(k => k.Title).sort((a, b) => a.localeCompare(b, 'de'));
+    // Spalte „Bezeichnung“ gibt es erst, nachdem ein Administrator die App ab 0.5.0 geöffnet hat
+    const ks = await getAll(`${L('RK_Kostenstellen')}/items?$select=Title,Aktiv,Bezeichnung&$top=1000`)
+      .catch(() => getAll(`${L('RK_Kostenstellen')}/items?$select=Title,Aktiv&$top=1000`));
+    S.master.kostenstellen = ks.filter(k => k.Aktiv !== false && k.Title).map(k => k.Title).sort((a, b) => a.localeCompare(b, 'de'));
+    S.master.projektNamen = Object.fromEntries(ks.filter(k => k.Title).map(k => [k.Title, k.Bezeichnung || '']));
   }
 
   /* ---------- Abrechnungen abgleichen ---------- */
@@ -710,17 +718,30 @@ const Data = (() => {
 
   /* ---------- Projektliste (RK_Kostenstellen), pflegt der Administrator ---------- */
   const byName = (a, b) => a.name.localeCompare(b.name, 'de');
-  function localMaster() { S.master.kostenstellen = (S.localProjects || []).filter(p => p.aktiv).map(p => p.name).sort((a, b) => a.localeCompare(b, 'de')); }
+  function localMaster() {
+    S.master.kostenstellen = (S.localProjects || []).filter(p => p.aktiv).map(p => p.name).sort((a, b) => a.localeCompare(b, 'de'));
+    S.master.projektNamen = Object.fromEntries((S.localProjects || []).map(p => [p.name, p.bezeichnung || '']));
+  }
+  // Projektbezeichnung zur Nummer (Auswahl und Anzeige)
+  const projektName = nr => (S.master.projektNamen || {})[String(nr || '').trim()] || '';
   async function projects() {
     if (!cloud) return (S.localProjects || []).slice().sort(byName);
-    return (await getAll(`${L('RK_Kostenstellen')}/items?$select=Id,Title,Aktiv&$top=2000`)).map(i => ({ id: i.Id, name: i.Title || '', aktiv: i.Aktiv !== false })).sort(byName);
+    const items = await getAll(`${L('RK_Kostenstellen')}/items?$select=Id,Title,Aktiv,Bezeichnung&$top=2000`)
+      .catch(() => getAll(`${L('RK_Kostenstellen')}/items?$select=Id,Title,Aktiv&$top=2000`));
+    return items.map(i => ({ id: i.Id, name: i.Title || '', bezeichnung: i.Bezeichnung || '', aktiv: i.Aktiv !== false })).sort(byName);
   }
-  async function addProject(name) {
-    name = String(name || '').trim();
-    if (!name) throw new Error('Bitte einen Projektnamen eingeben.');
+  async function addProject(name, bezeichnung = '') {
+    name = String(name || '').trim(); bezeichnung = String(bezeichnung || '').trim();
+    if (!name) throw new Error('Bitte die Projektnummer bzw. Kostenstelle eingeben.');
     if ((await projects()).some(p => p.name.toLowerCase() === name.toLowerCase())) throw new Error(`„${name}“ steht schon in der Projektliste.`);
-    if (!cloud) { (S.localProjects = S.localProjects || []).push({ id: uid(), name, aktiv: true }); localMaster(); persist(); return; }
-    await createItem('RK_Kostenstellen', { Title: name.slice(0, 250), Aktiv: true });
+    if (!cloud) { (S.localProjects = S.localProjects || []).push({ id: uid(), name, bezeichnung, aktiv: true }); localMaster(); persist(); return; }
+    await createItem('RK_Kostenstellen', { Title: name.slice(0, 250), Aktiv: true, ...(bezeichnung ? { Bezeichnung: bezeichnung.slice(0, 250) } : {}) });
+    await pullMaster(); persist();
+  }
+  async function setProjectName(id, bezeichnung) {
+    bezeichnung = String(bezeichnung || '').trim();
+    if (!cloud) { const p = (S.localProjects || []).find(x => x.id === id); if (p) p.bezeichnung = bezeichnung; localMaster(); persist(); return; }
+    await updateItem('RK_Kostenstellen', id, { Bezeichnung: bezeichnung.slice(0, 250) });
     await pullMaster(); persist();
   }
   async function setProject(id, aktiv) {
@@ -750,7 +771,7 @@ const Data = (() => {
     notes: id => S.notes.filter(n => n.itemId === id), review: id => (S.review[id] = S.review[id] || { vermerke: {}, ablageort: '' }),
     clearReview: id => { delete S.review[id]; persist(); },
     newDraft, touch, removeDraft, fileOf, fileUrl, act, protokoll, persist,
-    members, addMember, removeMember, GROUPS, projects, addProject, setProject,
+    members, addMember, removeMember, GROUPS, projects, addProject, setProject, setProjectName, projektName,
     setLocalName: n => { if (!cloud) { S.user.name = n; S.user.mail = n.trim().toLowerCase().replace(/\s+/g, '.') + '@lokal'; persist(); } },
     inTeams: () => teamsMode, signedIn: () => !cloud || !!account, Flow
   };

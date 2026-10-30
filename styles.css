@@ -352,3 +352,15 @@ body.drop-on .modal .belege, body.drop-on .pos-list { background: var(--accent-l
 .preview-bar .pv-btn:hover { background: rgba(255,255,255,.15); }
 .preview-bar .pv-btn svg { width: 16px; height: 16px; }
 .preview-bar .pv-dl { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Projekte: Bezeichnung unter dem Feld, Pflege in der Verwaltung */
+.proj-name { display: block; min-height: 1.2em; margin-top: 3px; font-size: 12.5px; color: var(--accent-d); }
+.proj-new { flex-wrap: wrap; }
+.proj-new .proj-nr { flex: 0 1 220px; }
+.members.projects .proj-row { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; flex-wrap: wrap; }
+.proj-bez-in { flex: 1 1 200px; min-width: 0; border: 1px solid var(--border); border-radius: 5px; padding: 6px 8px; background: var(--surface); color: var(--text); font-size: 14px; }
+
+/* Auswahl (Position verschieben) */
+.choose-list { display: flex; flex-direction: column; gap: 6px; max-height: 50vh; overflow: auto; }
+.choose-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-2); color: var(--text); }
+.choose-item:hover, .choose-item:focus { border-color: var(--accent); background: var(--accent-l); }

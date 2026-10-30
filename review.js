@@ -232,7 +232,8 @@ const Review = (() => {
     'proj-add': async el => {
       const inp = $('#proj-in');
       el.disabled = true;
-      try { await Data.addProject(inp.value); inp.value = ''; toast('Projekt hinzugefügt.'); await loadProjects(); }
+      const bez = $('#proj-bez');
+      try { await Data.addProject(inp.value, bez?.value); inp.value = ''; if (bez) bez.value = ''; toast('Projekt hinzugefügt.'); await loadProjects(); }
       catch (e) { toast(e.message, 8000); }
       finally { el.disabled = false; }
     },
@@ -257,15 +258,16 @@ const Review = (() => {
     besucher: { title: 'Mitarbeiter mit Zugang', group: 'Besucher der Website', text: 'Alle, die Reisekosten abrechnen. Wer eine der Rollen oben erhält, wird hier automatisch mit eingetragen.' }
   };
   function rolesView() {
-    if (!R().admin) return `<div class="page narrow"><div class="page-head"><h1>Verwaltung</h1></div><div class="card"><div class="card-body">Nur Administratoren (Besitzer der SharePoint-Website) verwalten Rollen und Projekte.</div></div></div>`;
+    if (!R().admin && !R().pruefung) return `<div class="page narrow"><div class="page-head"><h1>Verwaltung</h1></div><div class="card"><div class="card-body">Die Projektliste pflegen Administratoren und die kaufmännische Prüfung; Rollen nur Administratoren (Besitzer der SharePoint-Website).</div></div></div>`;
     return `<div class="page narrow">
       <div class="page-head"><h1>Verwaltung</h1></div>
       <div class="card"><div class="card-head">Projekte und Kostenstellen</div><div class="card-body">
         <p class="muted" style="margin-top:0">Auswahlliste für Reisen, Positionen und die Excel-Vorlage der Fahrten. Nicht mehr benötigte Projekte bitte deaktivieren statt löschen – bestehende Abrechnungen behalten ihren Projektnamen.</p>
         <div id="proj-list">${projectsHTML()}</div>
-        <div class="row"><input class="role-in" id="proj-in" placeholder="Neues Projekt, z. B. 26-014 Uniper Besucherzentrum WHV">
+        <div class="row proj-new"><input class="role-in proj-nr" id="proj-in" placeholder="Nummer, z. B. 26-014 oder Allgemeinkosten">
+          <input class="role-in" id="proj-bez" placeholder="Bezeichnung, z. B. Uniper Besucherzentrum WHV">
           <button class="btn primary small" data-action="proj-add">Hinzufügen</button></div></div></div>
-      ${Data.cloud ? `<h2 class="sec">Rollen</h2>
+      ${!R().admin ? '<p class="muted">Rollen (Prüfung, Freigabe, Zugang) vergibt ein Administrator.</p>' : Data.cloud ? `<h2 class="sec">Rollen</h2>
       <p class="page-hint muted">Die Rollen sind Gruppen der SharePoint-Website „Reisekosten“. Der Flow prüft bei jedem Auftrag, ob die Person in der passenden Gruppe ist. Vier-Augen-Prinzip: Wer prüft, sollte nicht zugleich freigeben.</p>
       ${Object.keys(ROLES).map(k => `<div class="card"><div class="card-head">${esc(ROLES[k].title)} <span class="muted small">(${esc(ROLES[k].group)})</span></div>
         <div class="card-body"><p class="muted" style="margin-top:0">${esc(ROLES[k].text)}</p><div id="role-${k}">${membersHTML(k)}</div>
@@ -280,7 +282,8 @@ const Review = (() => {
     if (projData.status === 'error') return `<span class="muted">Fehler: ${esc(projData.error)}</span>`;
     if (!projData.list.length) return '<span class="muted">Noch keine Projekte eingetragen.</span>';
     const list = [...projData.list].sort((a, b) => (b.aktiv - a.aktiv) || a.name.localeCompare(b.name, 'de'));
-    return `<ul class="members">${list.map(p => `<li${p.aktiv ? '' : ' class="off"'}><span><b>${esc(p.name)}</b>${p.aktiv ? '' : ' <span class="muted small">(deaktiviert)</span>'}</span>
+    return `<ul class="members projects">${list.map(p => `<li${p.aktiv ? '' : ' class="off"'}><span class="proj-row"><b>${esc(p.name)}</b>${p.aktiv ? '' : ' <span class="muted small">(deaktiviert)</span>'}
+        <input class="proj-bez-in" data-proj-bez="${esc(String(p.id))}" value="${esc(p.bezeichnung || '')}" placeholder="Bezeichnung ergänzen" aria-label="Bezeichnung zu ${esc(p.name)}"></span>
       <label class="check" style="margin:0"><input type="checkbox" data-proj="${esc(String(p.id))}"${p.aktiv ? ' checked' : ''}> aktiv</label></li>`).join('')}</ul>`;
   }
   async function loadProjects() {
@@ -288,6 +291,12 @@ const Review = (() => {
     catch (e) { projData = { status: 'error', list: [], error: e.message }; }
     const box = $('#proj-list');
     if (box) box.innerHTML = projectsHTML();
+  }
+  async function renameProject(el) { // Bezeichnung beim Verlassen des Feldes speichern
+    const p = projData.list.find(x => String(x.id) === el.dataset.projBez);
+    if (!p || (p.bezeichnung || '') === el.value.trim()) return;
+    try { await Data.setProjectName(p.id, el.value); p.bezeichnung = el.value.trim(); toast('Bezeichnung gespeichert.'); }
+    catch (e) { toast(e.message, 8000); el.value = p.bezeichnung || ''; }
   }
   async function toggleProject(el) {
     const p = projData.list.find(x => String(x.id) === el.dataset.proj);
@@ -309,7 +318,7 @@ const Review = (() => {
     return both.length ? `<div class="banner bad">${ic('warn')}<div>In beiden Rollen: <b>${esc(both.map(x => x.name).join(', '))}</b>. Die App verhindert trotzdem, dass dieselbe Person eine Abrechnung prüft und freigibt.</div></div>` : '';
   }
   async function loadRoles(only) {
-    if (!only && R().admin) loadProjects();
+    if (!only && (R().admin || R().pruefung)) loadProjects();
     if (!Data.cloud || !R().admin) return;
     for (const k of only ? [only] : Object.keys(ROLES)) {
       roleData[k] = { status: 'loading', list: roleData[k]?.list || [] };
@@ -320,5 +329,5 @@ const Review = (() => {
     }
   }
 
-  return { listView, claimView, after, onInput, actions, rolesView, loadRoles, toggleProject };
+  return { listView, claimView, after, onInput, actions, rolesView, loadRoles, toggleProject, renameProject };
 })();

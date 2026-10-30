@@ -112,7 +112,7 @@ function renderTabs(r) {
   const tabs = [['', 'Meine Reisekosten', 'list', 0]];
   if (R.pruefung) tabs.push(['pruefung', 'Prüfung', 'shield', open('Eingereicht') + open('Freigegeben')]);
   if (R.freigabe) tabs.push(['freigabe', 'Freigabe', 'check', open('Geprüft')]);
-  if (R.admin) tabs.push(['rollen', 'Verwaltung', 'users', 0]);
+  if (R.admin || R.pruefung) tabs.push(['rollen', 'Verwaltung', 'users', 0]); // Prüfung pflegt die Projektliste, Rollen nur der Administrator
   nav.hidden = tabs.length < 2;
   const cur = r === 'reise' ? UI.lastTab || '' : ['pruefung', 'freigabe', 'rollen'].includes(r) ? r : '';
   if (r !== 'reise') UI.lastTab = cur;
@@ -147,17 +147,22 @@ function homeView() {
       <button class="btn primary" data-action="new">${ic('plus')} NEUE REISE</button></span></div>
     <div class="home-tools"><button class="btn ghost small" data-action="import-pick">${ic('file')} Fahrten aus Excel übernehmen</button>
       <button class="link small" data-action="import-template">Excel-Vorlage für Fahrten herunterladen</button></div>
-    ${drafts.length ? `<h2 class="sec">In Bearbeitung</h2><div class="trips">${drafts.map(d => card(d)).join('')}</div>` : ''}
+    ${drafts.length ? `<h2 class="sec">In Bearbeitung <span class="muted small">(zwischengespeichert, noch nicht eingereicht)</span></h2><div class="trips">${drafts.map(d => card(d)).join('')}</div>` : ''}
     ${claims.length ? `<h2 class="sec">Eingereicht</h2><div class="trips">${claims.map(c => card(c)).join('')}</div>` : ''}
     ${!drafts.length && !claims.length ? `<div class="empty"><p><b>Noch keine Reise erfasst.</b></p><p class="muted">Mit „Neue Reise“ anlegen, Kosten mit Beleg erfassen und zum Schluss unterschreiben und einreichen. Einzelne Ausgaben ohne Dienstreise (z. B. Material, Porto) über „Auslage“.</p></div>` : ''}
     <p class="foot"><a href="#/hilfe">${ic('help')} Hilfe</a></p>
   </div>`;
 }
 
-function field(label, key, value, { type = 'text', err, list, ph = '', mode, wide } = {}) {
+function field(label, key, value, { type = 'text', err, list, ph = '', mode, wide, proj } = {}) {
   return `<label class="fld${wide ? ' wide' : ''}${err ? ' err' : ''}"><span>${label}</span>
-    <input type="${type}" data-k="${key}" value="${esc(value)}" placeholder="${esc(ph)}"${list ? ` list="${list}"` : ''}${mode ? ` inputmode="${mode}"` : ''} autocomplete="off"></label>`;
+    <input type="${type}" data-k="${key}" value="${esc(value)}" placeholder="${esc(ph)}"${list ? ` list="${list}"` : ''}${mode ? ` inputmode="${mode}"` : ''} autocomplete="off">${proj ? projNameHTML(value) : ''}</label>`;
 }
+// Projekte: Auswahlliste mit Nummer und Bezeichnung; unter dem Feld die Bezeichnung des gewählten Projekts
+const projOptions = list => list.map(x => { const n = Data.projektName(x); return `<option value="${esc(x)}"${n ? ` label="${esc(n)}"` : ''}></option>`; }).join('');
+const projNameHTML = v => `<small class="proj-name">${esc(Data.projektName(v))}</small>`;
+const projLabel = v => { const n = Data.projektName(v); return v ? (n ? `${v} – ${n}` : v) : ''; };
+function updateProjName(el) { const s = el.closest('.fld')?.querySelector('.proj-name'); if (s) s.textContent = Data.projektName(el.value); }
 
 // Datum + Uhrzeit: volle Stunden und Minuten in 5-Minuten-Schritten (Wert „JJJJ-MM-TTTHH:MM“)
 function dtField(label, key, value, err) {
@@ -186,16 +191,16 @@ function tripView(d) {
     : `<div class="card"><div class="card-head">${title}</div><div class="card-body grid">
       ${artSeg}
       ${aus ? `${field('Wofür?', 'zweck', k.zweck, { err: E('zweck'), ph: 'z. B. Material für Baustelle Uniper', wide: true })}
-      ${field('Projekt / Kostenstelle', 'kostenstelle', k.kostenstelle, { err: E('kostenstelle'), list: 'dl-ks' })}
+      ${field('Projekt / Kostenstelle', 'kostenstelle', k.kostenstelle, { err: E('kostenstelle'), list: 'dl-ks', proj: true })}
       <p class="muted small wide" style="margin:0">Ohne Reiseziel, Beginn und Ende – Datum und Ort stehen bei den Belegen. Für Dienstreisen bitte „Dienstreise“ wählen.</p>`
     : `${field('Reisezweck', 'zweck', k.zweck, { err: E('zweck'), ph: 'z. B. Baubesprechung Neubau Uniper', wide: true })}
-      ${field('Projekt / Kostenstelle', 'kostenstelle', k.kostenstelle, { err: E('kostenstelle'), list: 'dl-ks' })}
+      ${field('Projekt / Kostenstelle', 'kostenstelle', k.kostenstelle, { err: E('kostenstelle'), list: 'dl-ks', proj: true })}
       ${field('Erhaltener Vorschuss (€)', 'vorschuss', moneyIn(k.vorschuss), { mode: 'decimal', ph: '0,00' })}
       ${field('Reiseziel (Ort)', 'ort', k.ort, { err: E('ort') })}
       ${field('Land', 'land', k.land, { err: E('land'), list: 'dl-land' })}
       ${dtField('Beginn', 'beginn', k.beginn, E('beginn'))}
       ${dtField('Ende', 'ende', k.ende, E('ende'))}`}
-      <datalist id="dl-ks">${usedKs.map(x => `<option value="${esc(x)}">`).join('')}</datalist>
+      <datalist id="dl-ks">${projOptions(usedKs)}</datalist>
       <datalist id="dl-land">${['Deutschland', 'Österreich', 'Schweiz', 'Niederlande', 'Belgien', 'Luxemburg', 'Frankreich', 'Dänemark', 'Polen', 'Italien', 'Spanien', 'Vereinigtes Königreich'].map(x => `<option value="${x}">`).join('')}</datalist>
     </div></div>`;
   const rows = d.positionen.map((p, i) => posRow(d, p, i, errs.has('p:' + p.id), ro)).join('');
@@ -223,9 +228,9 @@ const pdfBtn = d => `<button class="btn ghost small" data-action="pdf" data-id="
 function readHead(d) {
   const k = d.kopf;
   const row = (l, v) => `<div class="rd"><span>${l}</span><b>${esc(v || '–')}</b></div>`;
-  if (isAuslage(d)) return `<div class="rd-grid">${row('Art', artName(d))}${row('Wofür', k.zweck)}${row('Projekt / Kostenstelle', k.kostenstelle)}
+  if (isAuslage(d)) return `<div class="rd-grid">${row('Art', artName(d))}${row('Wofür', k.zweck)}${row('Projekt / Kostenstelle', projLabel(k.kostenstelle))}
     ${row('Belegdatum', whenText(d))}${k.vorschuss ? row('Vorschuss', money(k.vorschuss)) : ''}</div>`;
-  return `<div class="rd-grid">${row('Art', artName(d))}${row('Reisezweck', k.zweck)}${row('Projekt / Kostenstelle', k.kostenstelle)}${row('Reiseziel', [k.ort, k.land].filter(Boolean).join(', '))}
+  return `<div class="rd-grid">${row('Art', artName(d))}${row('Reisezweck', k.zweck)}${row('Projekt / Kostenstelle', projLabel(k.kostenstelle))}${row('Reiseziel', [k.ort, k.land].filter(Boolean).join(', '))}
     ${row('Beginn', fmtDT(k.beginn))}${row('Ende', fmtDT(k.ende))}${row('Vorschuss', money(k.vorschuss))}</div>`;
 }
 function posRow(d, p, i, err, ro) {
@@ -235,7 +240,7 @@ function posRow(d, p, i, err, ro) {
   const dig = p.belege.filter(b => b.digital).length;
   const bel = isKm(p) ? '' : p.belege.length ? `<span class="belcount">${ic('clip')}${p.belege.length}${dig ? ` · ${dig === p.belege.length ? 'digital' : dig + ' digital'}` : ''}</span>`
     : p.eigenbeleg ? '<span class="belcount eigen">Eigenbeleg</span>' : `<span class="belcount miss">${ic('warn')}kein Beleg</span>`;
-  const proj = projektOf(d, p), projNote = proj && proj !== String(d.kopf.kostenstelle || '').trim() ? `<span class="pos-sub">Projekt: ${esc(proj)}</span>` : '';
+  const proj = projektOf(d, p), projNote = proj && proj !== String(d.kopf.kostenstelle || '').trim() ? `<span class="pos-sub">Projekt: ${esc(projLabel(proj))}</span>` : '';
   const eigen = p.eigenbeleg && ro ? `<span class="pos-note warn">Eigenbeleg: ${esc(p.eigenbelegGrund || '')}</span>` : ''; // B-06: in der Prüfung sichtbar
   const note = d.pruefung?.[p.id]?.kommentar ? `<span class="pos-note">Prüfung: ${esc(d.pruefung[p.id].kommentar)}</span>` : '';
   return `<button class="pos-row${err ? ' err' : ''}" data-action="${ro ? 'view-pos' : 'edit-pos'}" data-id="${esc(p.id)}">
@@ -294,6 +299,8 @@ function helpView() {
         <li>Baustellenfahrten eines Monats: Startseite → <b>Excel-Vorlage für Fahrten herunterladen</b>, im Laufe des Monats je Fahrt eine Zeile mit Projekt ausfüllen, am Monatsende <b>Fahrten aus Excel übernehmen</b>.</li>
         <li>Fahrten mit dem eigenen Pkw als <b>Privat-Pkw (Kilometer)</b> erfassen – der Betrag wird aus den Kilometern berechnet, ein Beleg ist nicht nötig.</li>
         <li>Zum Schluss <b>Unterschreiben und einreichen</b>. Die App prüft vorher, ob alle Pflichtangaben vorhanden sind.</li></ol>
+      <h3>Mehrere Abrechnungen, Belege sammeln</h3>
+      <p>Sie können beliebig viele Abrechnungen gleichzeitig offen haben; alles wird zwischengespeichert, bis Sie einreichen. Belege über einen Zeitraum sammeln: z. B. eine Auslage „Belege Oktober“ anlegen und Belege dort erfassen. Gehört ein Beleg später zu einer Reise oder einem anderen Projekt, die Position öffnen → <b>Verschieben …</b> → Ziel wählen oder eine neue Abrechnung anlegen. Belege wandern mit.</p>
       <h3>Einzelne Ausgabe ohne Dienstreise</h3>
       <p>Material, Porto, ein Parkschein vor Ort und Ähnliches: Startseite → <b>Auslage</b>. Es genügen „Wofür?“ und das Projekt; Reiseziel, Beginn und Ende entfallen, Datum und Ort stehen beim Beleg. Belege, Unterschrift, Prüfung und Freigabe laufen wie bei einer Reise.</p>
       <h3>Gut zu wissen</h3>
@@ -422,7 +429,7 @@ function renderPos() {
   const dis = ro ? ' disabled' : '';
   const inp = (label, f, val, extra = '') => `<label class="fld"><span>${label}</span><input data-p="${f}" value="${esc(val)}"${extra}${dis}></label>`;
   const kas = Data.master().kostenarten.filter(k => k.aktiv !== false || k.key === p.kostenart);
-  const projekt = inp('Projekt / Kostenstelle', 'projekt', p.projekt || '', ' list="dl-proj" placeholder="Projekt oder Kostenstelle" autocomplete="off"');
+  const projekt = `<label class="fld"><span>Projekt / Kostenstelle</span><input data-p="projekt" value="${esc(p.projekt || '')}" list="dl-proj" placeholder="Nummer oder Bezeichnung" autocomplete="off"${dis}>${projNameHTML(p.projekt)}</label>`;
   let body = '';
   // Neue Position ohne Kostenart: zuerst den Beleg erfassen, die App liest Kostenart, Betrag und Datum aus (B-12)
   if (!ka && !ro && Ocr.enabled()) body += `<div class="quick"><div class="quick-t">${ic('camera')}<span><b>Am schnellsten:</b> zuerst den Beleg fotografieren oder die Datei wählen – die App liest Kostenart, Betrag und Datum aus.</span></div>
@@ -456,13 +463,14 @@ function renderPos() {
     }
     body += `<label class="fld" style="margin-top:12px"><span>Bemerkung</span><input data-p="bemerkung" value="${esc(p.bemerkung)}"${dis}></label>`;
   }
-  body += `<datalist id="dl-proj">${Data.master().kostenstellen.map(x => `<option value="${esc(x)}">`).join('')}</datalist>`;
+  body += `<datalist id="dl-proj">${projOptions(Data.master().kostenstellen)}</datalist>`;
   const scroll = $('.modal-body')?.scrollTop || 0;
   $('#modal-root').innerHTML = `<div class="modal-back"><div class="modal sheet" role="dialog" aria-label="Position">
     <div class="modal-head"><h2>${ro ? 'Position' : s.isNew ? 'Neue Position' : 'Position bearbeiten'}</h2><button class="icon-btn" data-action="pos-cancel" aria-label="Schließen">${ic('x')}</button></div>
     <div class="modal-body">${body}</div>
     <div class="modal-foot">${ro ? '<span class="grow"></span><button class="btn ghost" data-action="pos-cancel">Schließen</button>'
-      : `${s.isNew ? '' : `<button class="btn danger-ghost" data-action="pos-delete">${ic('trash')} Löschen</button>`}<span class="grow"></span>
+      : `${s.isNew ? '' : `<button class="btn danger-ghost" data-action="pos-delete">${ic('trash')} Löschen</button>`}
+      <button class="btn ghost" data-action="pos-move" title="Position mit Belegen in eine andere Abrechnung verschieben"${s.busy || !p.kostenart ? ' disabled' : ''}>Verschieben …</button><span class="grow"></span>
       <button class="btn ghost" data-action="pos-cancel">Abbrechen</button><button class="btn primary" data-action="pos-save"${s.busy || !p.kostenart ? ' disabled' : ''}>Speichern</button>`}</div>
   </div></div>`;
   $('.modal-body').scrollTop = scroll;
@@ -486,6 +494,7 @@ function posInput(el) {
     renderPos(); return;
   }
   if (f.startsWith('bew.')) { p.bewirtung[f.slice(4)] = el.value; return; }
+  if (f === 'projekt') updateProjName(el);
   p[f] = f === 'ust' ? Number(el.value) : el.value;
   if (f === 'datum' || f === 'ust') s.touched[f] = true; // von Hand gesetzt: Belegerkennung überschreibt das nicht
   if (f === 'ust' && $('#ust-calc')) $('#ust-calc').textContent = ustText(p, s.raw.brutto);
@@ -552,9 +561,11 @@ async function runOcr(b, force) {
   if (UI.pos === s) renderPos();
 }
 function closePos() { $('#modal-root').innerHTML = ''; UI.pos = null; if (UI.pendingRender) render(); }
-function savePos() {
+function savePos() { if (applyPos()) { closePos(); render(); } }
+// Eingaben der geöffneten Position prüfen und in den Entwurf übernehmen; liefert { d, p } oder null
+function applyPos() {
   const s = UI.pos, d = Data.draft(s.draftId), p = s.p;
-  if (!d || s.busy) return;
+  if (!d || s.busy) return null;
   p.projekt = String(p.projekt || '').trim() || String(d.kopf.kostenstelle || '').trim();
   if (isKm(p)) {
     const km = parseNum(s.raw.km);
@@ -579,9 +590,41 @@ function savePos() {
   if (!isBew(p)) p.bewirtung = { anlass: '', teilnehmer: '', ort: '' };
   const i = d.positionen.findIndex(x => x.id === p.id);
   if (i >= 0) d.positionen[i] = p; else d.positionen.push(p);
-  dropFiles(d, s.removed);
+  dropFiles(d, s.removed); s.removed = [];
   Data.touch(d);
-  closePos(); render();
+  return { d, p };
+}
+/* Position mit Belegen in eine andere (oder neue) Abrechnung verschieben – z. B. aus einer Belegsammlung */
+async function movePos(src, p, dst) {
+  const belege = [];
+  for (const b of p.belege) {
+    const blob = await Data.fileOf(src, b); // liegt danach auf dem Gerät und wird mit der Ziel-Abrechnung hochgeladen
+    if (!blob) throw new Error(`Beleg „${b.name}“ ist nicht verfügbar (offline?). Bitte später erneut versuchen.`);
+    belege.push({ ...b, uploaded: false, datei: undefined });
+  }
+  for (const b of p.belege) if (b.uploaded && b.datei) (src.removed = src.removed || []).push(b.datei); // Anlage an der alten Abrechnung entfernen
+  const projAlt = String(src.kopf.kostenstelle || '').trim();
+  const q = { ...clone(p), belege };
+  if (!q.projekt || q.projekt === projAlt) q.projekt = String(dst.kopf.kostenstelle || '').trim() || q.projekt; // Projekt der Ziel-Abrechnung übernehmen
+  src.positionen = src.positionen.filter(x => x.id !== p.id);
+  dst.positionen.push(q);
+  Data.touch(src); Data.touch(dst);
+}
+const draftTitle = d => d.kopf.zweck || (isAuslage(d) ? 'Auslage ohne Zweck' : 'Reise ohne Zweck');
+// Auswahl in eigenem Fenster (wie ask); liefert den gewählten Wert oder null
+function choose(title, items) {
+  return new Promise(done => {
+    const w = document.createElement('div');
+    w.className = 'modal-back ask-back';
+    w.innerHTML = `<div class="modal ask" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="modal-body"><p><b>${esc(title)}</b></p>
+      <div class="choose-list">${items.map((it, i) => `<button type="button" class="choose-item" data-i="${i}"><b>${esc(it.label)}</b>${it.sub ? `<span class="muted small">${esc(it.sub)}</span>` : ''}</button>`).join('')}</div></div>
+      <div class="modal-foot"><span class="grow"></span><button class="btn ghost" data-i="-1">Abbrechen</button></div></div>`;
+    const end = v => { w.remove(); document.removeEventListener('keydown', key, true); done(v); };
+    const key = e => { if (e.key === 'Escape') { e.stopPropagation(); end(null); } };
+    w.addEventListener('click', e => { e.stopPropagation(); const b = e.target.closest('[data-i]'); if (b) end(b.dataset.i === '-1' ? null : items[Number(b.dataset.i)].value); else if (e.target === w) end(null); });
+    document.addEventListener('keydown', key, true);
+    document.body.appendChild(w);
+  });
 }
 function dropFiles(d, belege) {
   for (const b of belege) {
@@ -774,6 +817,27 @@ const ACTIONS = {
     s.raw[c.f] = moneyIn(r); s.calc = null; renderPos();
   },
   'pos-save': savePos,
+  'pos-move': async () => {
+    const s = UI.pos, src = Data.draft(s?.draftId);
+    if (!s || s.ro || !src) return;
+    const others = Data.drafts().filter(x => x !== src && editable(x));
+    const items = [
+      ...others.map(x => ({ value: x.id, label: draftTitle(x), sub: [artName(x), projLabel(x.kopf.kostenstelle), whenText(x), `${x.positionen.length} Pos.`].filter(Boolean).join(' · ') })),
+      { value: 'neu-auslage', label: '+ Neue Auslage (ohne Reise)', sub: 'z. B. für ein anderes Projekt oder eine größere Ausgabe' },
+      { value: 'neu-reise', label: '+ Neue Dienstreise', sub: '' }
+    ];
+    const ziel = await choose('Position verschieben nach …', items);
+    if (!ziel || UI.pos !== s) return;
+    const r = applyPos(); // Eingaben zuerst übernehmen
+    if (!r) return;
+    let dst = Data.draft(ziel);
+    if (!dst) { dst = Data.newDraft(); if (ziel === 'neu-auslage') dst.kopf.art = 'auslage'; dst.kopf.kostenstelle = r.p.projekt || ''; }
+    try {
+      await movePos(r.d, r.p, dst);
+      closePos(); location.hash = '#/reise/' + dst.id;
+      toast(`Position verschoben nach „${draftTitle(dst)}“.`, 5000);
+    } catch (e) { closePos(); render(); toast(e.message, 8000); }
+  },
   'pos-cancel': () => { if (UI.pos && !UI.pos.ro) for (const id of UI.pos.added) Media.del(id).catch(() => {}); closePos(); },
   'pos-delete': async () => {
     const s = UI.pos, d = Data.draft(s.draftId);
@@ -859,6 +923,7 @@ document.addEventListener('input', e => {
     if (k === 'vorschuss') { const c = parseMoney(el.value); if (!Number.isNaN(c)) d.kopf.vorschuss = c; }
     else d.kopf[k] = el.value;
     if (k === 'zweck') $('#trip-title').textContent = el.value || (isAuslage(d) ? 'Neue Auslage' : 'Neue Reise');
+    if (k === 'kostenstelle') updateProjName(el);
     el.closest('.fld')?.classList.remove('err');
     $('#sums').innerHTML = sumsHTML(d);
     clearTimeout(kopfTimer);
@@ -873,6 +938,7 @@ document.addEventListener('change', async e => {
   }
   if ((el.dataset.rv !== undefined && el.type === 'checkbox') || el.dataset.rf === 'status') return Review.onInput(el);
   if (el.dataset.proj) return Review.toggleProject(el);
+  if (el.dataset.projBez) return Review.renameProject(el);
   if (el.dataset.k === 'vorschuss') { const d = current(); if (d) el.value = moneyIn(d.kopf.vorschuss); }
   if (el.id === 'pick-camera' || el.id === 'pick-file') { const files = [...el.files]; el.value = ''; await addFiles(files); }
   if (el.id === 'pick-import') { const f = el.files[0]; el.value = ''; if (f) await Import.onFile(f); }

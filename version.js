@@ -1,6 +1,13 @@
 // Version der App – bei jeder Änderung hier, in CHANGELOG.md und in sw.js (CACHE) mitziehen
-const APP_VERSION = '0.4.3';
+const APP_VERSION = '0.5.0';
 const APP_CHANGES = [
+  {
+    v: '0.5.0', d: '30.10.2026', items: [
+      'Projekte mit Bezeichnung: bei der Auswahl stehen Nummer und Bezeichnung, unter dem Feld die Bezeichnung des gewählten Projekts; auch in Prüfung und PDF',
+      'Position verschieben: Position mit Belegen in eine andere offene Abrechnung oder in eine neue Auslage/Reise übernehmen – z. B. aus einer Belegsammlung',
+      'Die kaufmännische Prüfung pflegt die Projektliste (Reiter „Verwaltung“); Rollen vergibt weiterhin der Administrator'
+    ]
+  },
   {
     v: '0.4.3', d: '26.10.2026', items: [
       'PDF-Belege werden wieder angezeigt, auch in Teams und auf dem iPhone (die App zeichnet die Seiten selbst)',
